@@ -14,6 +14,7 @@ const NAV = [
 const NAV_BOTTOM = [
   { href: '/app/modelo',        label: 'Modelo' },
   { href: '/app/configuracion', label: 'Configuración' },
+  { href: '/app/admin',         label: 'Panel Admin', adminOnly: true },
 ]
 
 interface Session { name: string; role: 'admin' | 'agent'; campaign?: string }
@@ -31,8 +32,9 @@ export function Sidebar() {
       .catch(() => {})
   }, [])
 
-  const isAdmin    = session?.role === 'admin'
-  const visibleNav = NAV.filter(item => !item.adminOnly || isAdmin)
+  const isAdmin       = session?.role === 'admin'
+  const visibleNav    = NAV.filter(item => !item.adminOnly || isAdmin)
+  const visibleBottom = NAV_BOTTOM.filter(item => !(item as { adminOnly?: boolean }).adminOnly || isAdmin)
 
   function navigate(href: string) {
     if (href === pathname) return
@@ -69,7 +71,7 @@ export function Sidebar() {
 
       <div className="p-3 border-t border-neutral-800">
         <div className="space-y-0.5 mb-3">
-          {NAV_BOTTOM.map(navItem)}
+          {visibleBottom.map(navItem)}
         </div>
         <div className="border-t border-neutral-800 pt-3">
           <p className="text-xs text-neutral-600 px-3 mb-2">{session?.name ?? '...'}</p>

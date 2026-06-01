@@ -1124,6 +1124,7 @@ function StrategyCanvasCard({
   onNodeEdit,
   isOwnCampaign = false,
   assignedTo = null,
+  userName = null,
 }: {
   action: StrategyAction
   actionIndex: number
@@ -1132,6 +1133,7 @@ function StrategyCanvasCard({
   onNodeEdit: (nodeOrden: number, copies: NodeCopies) => void
   isOwnCampaign?: boolean
   assignedTo?: string | null
+  userName?: string | null
 }) {
   const [selectedNodeOrden, setSelectedNodeOrden] = useState<number | null>(null)
   const [razonExpanded, setRazonExpanded] = useState(false)
@@ -1143,11 +1145,13 @@ function StrategyCanvasCard({
     setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'loading' }))
     try {
       await api.updateNode({
-        action_id:   nodo.id_nodo_cio,
-        template_id: nodo.template_id,
-        subject:     copies.subject,
-        cuerpo:      copies.cuerpo,
-        preheader:   copies.preheader,
+        action_id:     nodo.id_nodo_cio,
+        template_id:   nodo.template_id,
+        subject:       copies.subject,
+        cuerpo:        copies.cuerpo,
+        preheader:     copies.preheader,
+        user_name:     userName ?? undefined,
+        campaign_name: action.campaña_existente_nombre ?? action.step_name ?? undefined,
       })
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'success' }))
     } catch (err) {
@@ -2057,6 +2061,7 @@ export default function EstrategiaPage() {
                       onNodeEdit={(nodeOrden, copies) => editNode(i, nodeOrden, copies)}
                       isOwnCampaign={isOwnCampaign(action)}
                       assignedTo={getCampaignOwner(action)}
+                      userName={currentUser?.name ?? null}
                     />
                   ))}
                 </>
@@ -2225,6 +2230,7 @@ export default function EstrategiaPage() {
                         }))}
                         isOwnCampaign={isOwnCampaign(action)}
                         assignedTo={getCampaignOwner(action)}
+                        userName={currentUser?.name ?? null}
                       />
                     ))}
                   </>
