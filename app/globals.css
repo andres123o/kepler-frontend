@@ -240,6 +240,36 @@
   }
 }
 
+/* Alerta suave: 3 parpadeos en los primeros 3s, silencio los siguientes 117s (ciclo 120s) */
+@keyframes warning-soft-pulse {
+  0%         { opacity: 0.55; box-shadow: 0 0 0 0 transparent; }
+  0.42%      { opacity: 1;    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2); }
+  0.83%      { opacity: 0.55; box-shadow: 0 0 0 0 transparent; }
+  1.25%      { opacity: 1;    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2); }
+  1.67%      { opacity: 0.55; box-shadow: 0 0 0 0 transparent; }
+  2.08%      { opacity: 1;    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2); }
+  2.5%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Thin scrollbar for canvas editor panel */
+.kepler-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.kepler-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kepler-scroll::-webkit-scrollbar-thumb {
+  background: #2e2e2e;
+  border-radius: 2px;
+}
+.kepler-scroll::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+.kepler-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #2e2e2e transparent;
+}
+
 /* Forzar botón negro siempre, incluso cuando está deshabilitado */
 .btn-black-always {
   background-color: #000000 !important;

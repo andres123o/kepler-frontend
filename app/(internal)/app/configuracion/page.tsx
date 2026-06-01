@@ -606,14 +606,7 @@ function KnowledgeBaseSection() {
 export default function ConfiguracionPage() {
   return (
     <div className="flex-1 overflow-auto bg-neutral-950">
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
-
-        <div>
-          <h1 className="text-white text-2xl font-bold">Configuración</h1>
-          <p className="text-neutral-500 text-sm mt-1">
-            Gestiona las campañas que Kepler monitorea y el contexto que Claude usa para generar estrategias.
-          </p>
-        </div>
+      <div className="px-6 py-8 space-y-10">
 
         <CampaignsSection />
         <KnowledgeBaseSection />

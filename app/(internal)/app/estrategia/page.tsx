@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   api,
   type FunnelStep,
@@ -10,7 +11,6 @@ import {
   type StrategyNode,
   type SafetyStatus,
   type SyncResult,
-  type ExecuteResult,
   type SystemContext,
   type FunnelStepRaw,
   type CampaignCacheRaw,
@@ -38,7 +38,7 @@ function toLiquid(v: string | { conservador?: string; moderado?: string; arriesg
   const c = v.conservador ?? ''
   const m = v.moderado ?? v.arriesgado ?? ''
   const a = v.arriesgado ?? ''
-  return `{% if customer.Perfil_de_riesgo == '1. Conservador' -%}${c}{%- elsif customer.Perfil_de_riesgo == '2. Moderado' or customer.Perfil_de_riesgo == '3. Arriesgado' -%}${m}{%- else -%}${a}{%- endif %}`
+  return `{% if customer.Perfil_de_riesgo == '1. Conservador' %}${c}{% elsif customer.Perfil_de_riesgo == '2. Moderado' or customer.Perfil_de_riesgo == '3. Arriesgado' %}${m}{% else %}${a}{% endif %}`
 }
 
 // ─── Mini helpers ─────────────────────────────────────────────────────────────
@@ -191,65 +191,79 @@ function buildCampaignViews(health: FunnelStep[]): { campaignViews: CampaignView
 // ─── Funnel Step Card ─────────────────────────────────────────────────────────
 
 function CampaignBlock({ c }: { c: CampaignSummary }) {
+  const [warningHover, setWarningHover] = useState(false)
   const cr = c.conversion_rate
   const crPct = (cr * 100).toFixed(1)
   const sparkData = c.metrics_weekly_json?.series?.converted ?? []
 
-  const [crColor, crBadgeCls, crLabel] =
-    cr >= 0.07 ? ['text-emerald-400', 'bg-emerald-500/12 border-emerald-500/20', 'Convirtiendo bien']  :
-    cr >= 0.03 ? ['text-amber-400',   'bg-amber-500/12 border-amber-500/20',   'Puede mejorar']        :
-                 ['text-red-400',     'bg-red-500/12 border-red-500/20',        'Bajo — necesita atención']
+  const crColor =
+    cr >= 0.07 ? 'text-emerald-400' :
+    cr >= 0.03 ? 'text-amber-400'   :
+                 'text-red-400'
 
-  const statusLabel = c.status ? (STATUS_LABELS[c.status] ?? c.status) : '—'
   const isActive    = c.status === 'running'
-
-  const nToques = c.n_nodos ?? null
+  const statusLabel = c.status ? (STATUS_LABELS[c.status] ?? c.status) : '—'
+  const nToques     = c.n_nodos ?? null
+  const hasActivity = c.delivered > 0 || c.total_sent > 0
+  const hasWarnings = !!(c.warnings && c.warnings.length > 0)
 
   return (
-    <div className="px-4 py-3 flex flex-col gap-2">
-      {/* Name + status + estructura del journey */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-neutral-300 font-medium leading-snug" title={c.name}>{c.name}</p>
-          {nToques !== null && nToques > 0 && (
-            <p className="text-[10px] text-neutral-600 mt-0.5">
-              Secuencia de {nToques} mensajes programados (push + email)
-            </p>
+    <div className="relative px-4 py-3.5">
+
+      {/* Warning — top-right corner */}
+      {hasWarnings && (
+        <div
+          className="absolute top-3.5 right-3.5 z-10"
+          onMouseEnter={() => setWarningHover(true)}
+          onMouseLeave={() => setWarningHover(false)}
+        >
+          <div className="w-3.5 h-3.5 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center cursor-default">
+            <span className="text-[8px] text-amber-400/80 leading-none">⚠</span>
+          </div>
+          {warningHover && (
+            <div className="absolute right-0 top-full mt-1.5 z-50 w-60 bg-neutral-800 border border-amber-500/20 rounded-xl px-3 py-2.5 shadow-2xl">
+              <p className="text-[10px] text-amber-400/60 uppercase tracking-wider mb-1.5">
+                {c.warnings!.length} alerta{c.warnings!.length !== 1 ? 's' : ''}
+              </p>
+              <div className="space-y-1.5">
+                {c.warnings!.map((w, i) => (
+                  <p key={i} className="text-[11px] text-neutral-300 leading-relaxed">{w}</p>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 border ${
-          isActive ? 'bg-emerald-500/12 text-emerald-400 border-emerald-500/20' : 'bg-neutral-800 text-neutral-500 border-neutral-700'
-        }`}>
-          {statusLabel}
-        </span>
+      )}
+
+      {/* Name */}
+      <div className="flex items-center gap-2 pr-7 mb-2.5">
+        <p className="text-[12px] font-medium text-neutral-300 leading-snug flex-1 min-w-0 truncate" title={c.name}>{c.name}</p>
+        {nToques !== null && nToques > 0 && (
+          <span className="text-[10px] text-neutral-600 shrink-0 tabular-nums">×{nToques}</span>
+        )}
+        {!isActive && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 border bg-neutral-800 text-neutral-500 border-neutral-700">
+            {statusLabel}
+          </span>
+        )}
       </div>
 
-      {/* CR badge + trend + métricas del último mes */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${crBadgeCls}`}>
-          <span className={`text-sm font-bold tabular-nums leading-none ${crColor}`}>{crPct}%</span>
-          <span className={`text-[10px] font-medium ${crColor}`}>{crLabel}</span>
-        </div>
+      {/* CR + sparkline */}
+      <div className="flex items-end justify-between mb-2">
+        <span className={`text-2xl font-bold tabular-nums leading-none ${crColor}`}>{crPct}%</span>
         {sparkData.length > 3 && <Sparkline data={sparkData} />}
-        <span className="text-neutral-600 text-[10px] tabular-nums ml-auto">
-          {c.total_sent > c.delivered
-            ? <>{c.total_sent.toLocaleString('es-CO')} env. → {c.delivered.toLocaleString('es-CO')} llegaron</>
-            : <>{c.delivered.toLocaleString('es-CO')} llegaron</>
-          }
-          {' · '}{c.converted.toLocaleString('es-CO')} {goalLabel(c.goal_event)}
-          <span className="text-neutral-700"> · últ. 4 sem.</span>
-        </span>
       </div>
 
-      {/* Warnings específicos de esta campaña */}
-      {c.warnings && c.warnings.length > 0 && (
-        <div className="space-y-1">
-          {c.warnings.map((w, i) => (
-            <p key={i} className="text-[11px] text-amber-400 bg-amber-500/8 border border-amber-500/15 rounded-md px-2.5 py-1.5 leading-relaxed">
-              ⚠ {w}
-            </p>
-          ))}
-        </div>
+      {/* Metrics — plain text, no chips */}
+      {hasActivity && (
+        <p className="text-[10px] text-neutral-600 tabular-nums leading-relaxed">
+          {c.total_sent > c.delivered && <>{c.total_sent.toLocaleString('es-CO')} → </>}
+          {c.delivered.toLocaleString('es-CO')} llegaron
+          {' · '}
+          {c.converted.toLocaleString('es-CO')} {goalLabel(c.goal_event)}
+          {' · '}
+          <span className="text-neutral-700">últ. 4 sem.</span>
+        </p>
       )}
     </div>
   )
@@ -314,86 +328,125 @@ function FunnelStepCard({ step }: { step: FunnelStep }) {
 // ─── Campaign Diagnostic Card ─────────────────────────────────────────────────
 
 function CampaignDiagnosticCard({ view }: { view: CampaignView }) {
+  const [stepsHover, setStepsHover]     = useState(false)
+  const [warningHover, setWarningHover] = useState(false)
   const { campaign: c, coveredSteps, stepRangeLabel, health } = view
   const s = H_STYLES[health]
-
-  const healthBadgeCls =
-    health === 'verde'    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-    health === 'amarillo' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'       :
-    health === 'spike'    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'    :
-                           'bg-neutral-800 text-neutral-500 border-neutral-700'
 
   const cr = c.conversion_rate
   const crPct = (cr * 100).toFixed(1)
   const sparkData = c.metrics_weekly_json?.series?.converted ?? []
 
-  const [crColor, crBadgeCls, crLabel] =
-    cr >= 0.07 ? ['text-emerald-400', 'bg-emerald-500/12 border-emerald-500/20', 'Convirtiendo bien'] :
-    cr >= 0.03 ? ['text-amber-400',   'bg-amber-500/12 border-amber-500/20',   'Puede mejorar']       :
-                 ['text-red-400',     'bg-red-500/12 border-red-500/20',        'Bajo — atención']
+  const crColor =
+    cr >= 0.07 ? 'text-emerald-400' :
+    cr >= 0.03 ? 'text-amber-400'   :
+                 'text-red-400'
+
+  const crLabel =
+    cr >= 0.07 ? 'Convirtiendo bien' :
+    cr >= 0.03 ? 'Puede mejorar'     :
+                 'Bajo rendimiento'
 
   const isActive    = c.status === 'running'
   const statusLabel = c.status ? (STATUS_LABELS[c.status] ?? c.status) : '—'
+  const hasActivity = c.delivered > 0 || c.total_sent > 0
+  const hasWarnings = !!(c.warnings && c.warnings.length > 0)
 
   return (
-    <div className={`bg-neutral-900 border rounded-xl overflow-hidden ${s.ring}`}>
+    <div className={`relative bg-neutral-900 border rounded-xl ${s.ring}`}>
 
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-neutral-800/70 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 min-w-0">
-          <HealthDot health={health} />
-          <div className="min-w-0">
-            <p className="text-white text-sm font-semibold leading-tight truncate">{c.name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <span className="text-neutral-600 text-[10px] font-mono shrink-0">{stepRangeLabel}</span>
-              {coveredSteps.map(cs => (
-                <span key={cs.step_code} className="text-[10px] text-neutral-700 bg-neutral-800/80 px-1.5 py-0.5 rounded leading-none">
-                  {cs.step_name}
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* Sparkline — absolute bottom-right */}
+      {sparkData.length > 3 && (
+        <div className="absolute bottom-3 right-3 z-10">
+          <Sparkline data={sparkData} />
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
-            isActive ? 'bg-emerald-500/12 text-emerald-400 border-emerald-500/20' : 'bg-neutral-800 text-neutral-500 border-neutral-700'
-          }`}>
-            {statusLabel}
-          </span>
-          <span className={`text-[10px] px-2.5 py-0.5 rounded-full border font-medium ${healthBadgeCls}`}>
-            {H_LEGEND[health]}
-          </span>
-        </div>
-      </div>
+      )}
 
-      {/* Body */}
-      <div className="px-4 py-3 space-y-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${crBadgeCls}`}>
-            <span className={`text-sm font-bold tabular-nums leading-none ${crColor}`}>{crPct}%</span>
-            <span className={`text-[10px] font-medium ${crColor}`}>{crLabel}</span>
+      {/* Alerta — top-right, parpadea 3s cada 2 min */}
+      {hasWarnings && (
+        <div
+          className="absolute top-3 right-3 z-10"
+          onMouseEnter={() => setWarningHover(true)}
+          onMouseLeave={() => setWarningHover(false)}
+        >
+          <div
+            className="w-4 h-4 rounded-full bg-amber-500/15 border border-amber-400/45 flex items-center justify-center cursor-default"
+            style={{ animation: 'warning-soft-pulse 120s ease-in-out infinite' }}
+          >
+            <span className="text-[9px] font-bold text-amber-400 leading-none select-none">!</span>
           </div>
-          {sparkData.length > 3 && <Sparkline data={sparkData} />}
-          <span className="text-neutral-600 text-[10px] tabular-nums ml-auto">
-            {c.total_sent > c.delivered
-              ? <>{c.total_sent.toLocaleString('es-CO')} env. → {c.delivered.toLocaleString('es-CO')} llegaron</>
-              : <>{c.delivered.toLocaleString('es-CO')} llegaron</>
-            }
-            {' · '}{c.converted.toLocaleString('es-CO')} {goalLabel(c.goal_event)}
-            <span className="text-neutral-700"> · últ. 4 sem.</span>
-          </span>
-        </div>
-        {c.warnings && c.warnings.length > 0 && (
-          <div className="space-y-1">
-            {c.warnings.map((w, i) => (
-              <p key={i} className="text-[11px] text-amber-400 bg-amber-500/8 border border-amber-500/15 rounded-md px-2.5 py-1.5 leading-relaxed">
-                ⚠ {w}
+          {warningHover && (
+            <div className="absolute right-0 top-full mt-2 z-50 bg-neutral-800 border border-amber-500/20 rounded-xl px-3.5 py-3 shadow-2xl" style={{ width: '260px' }}>
+              <p className="text-[10px] text-amber-400/60 uppercase tracking-wider mb-2">
+                {c.warnings!.length} alerta{c.warnings!.length !== 1 ? 's' : ''}
               </p>
-            ))}
-          </div>
-        )}
-      </div>
+              <div className="space-y-2">
+                {c.warnings!.map((w, i) => (
+                  <p key={i} className="text-[11px] text-neutral-300 leading-relaxed">{w}</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
+      <div className="flex min-h-[120px]">
+
+        {/* Columna izquierda — CR + label, ocupa toda la altura */}
+        <div className="shrink-0 flex flex-col items-center justify-center px-5 border-r border-neutral-800/60 gap-1.5">
+          <span className={`text-3xl font-bold tabular-nums leading-none ${crColor}`}>{crPct}%</span>
+          <p className={`text-[10px] font-medium leading-none ${crColor} opacity-60`}>{crLabel}</p>
+        </div>
+
+        {/* Columna derecha — título + métricas centrados verticalmente + sparkline */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center px-4 py-4 pr-3 gap-1.5">
+
+          {/* Nombre (hover: pasos) + status */}
+          <div
+            className="relative"
+            onMouseEnter={() => setStepsHover(true)}
+            onMouseLeave={() => setStepsHover(false)}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-[13px] font-semibold text-white leading-snug truncate cursor-default flex-1 min-w-0">{c.name}</p>
+              {!isActive && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium border bg-neutral-800 text-neutral-500 border-neutral-700 shrink-0">
+                  {statusLabel}
+                </span>
+              )}
+            </div>
+            {stepsHover && coveredSteps.length > 0 && (
+              <div className="absolute left-0 top-full mt-2 z-50 bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 shadow-2xl min-w-[180px]">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium mb-1.5">Pasos que cubre</p>
+                <div className="space-y-1">
+                  {coveredSteps.map(cs => (
+                    <div key={cs.step_code} className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-neutral-600 shrink-0">{cs.step_order}.</span>
+                      <span className="text-xs text-neutral-300">{cs.step_name}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-neutral-600 font-mono border-t border-neutral-700/60 mt-1.5 pt-1.5">{stepRangeLabel}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Métricas */}
+          {hasActivity && (
+            <div className="min-w-0 pr-16">
+              <p className="text-[11px] text-neutral-500 tabular-nums leading-relaxed">
+                {c.total_sent > 0 && <>{c.total_sent.toLocaleString('es-CO')} <span className="text-neutral-600">enviados</span> → </>}
+                {c.delivered.toLocaleString('es-CO')} <span className="text-neutral-600">llegaron</span>
+                {' · '}
+                {c.converted.toLocaleString('es-CO')} <span className="text-neutral-600">completaron</span>{' '}
+                {goalLabel(c.goal_event)}
+              </p>
+              <p className="text-[10px] text-neutral-700 tabular-nums mt-0.5">últ. 4 sem.</p>
+            </div>
+          )}
+
+        </div>
+      </div>
     </div>
   )
 }
@@ -405,6 +458,81 @@ const TIPO_CFG: Record<string, { label: string; cls: string }> = {
   reforzar:   { label: 'REFORZAR',  cls: 'bg-purple-500/12 text-purple-400 border-purple-500/25' },
   alerta_gap: { label: 'GAP',       cls: 'bg-neutral-500/12 text-neutral-400 border-neutral-600/40' },
   crear:      { label: 'CREAR',     cls: 'bg-sky-500/12 text-sky-400 border-sky-500/25' },
+}
+
+// ─── Liquid display helpers ───────────────────────────────────────────────────
+
+// Renderiza texto con Liquid: las expresiones {% %} y {{ }} en color ámbar,
+// el resto en texto normal. Sin parsing complejo, sin tarjetas.
+function renderLiquidText(text: string): React.ReactNode[] {
+  const parts = text.split(/(\{%[\s\S]*?%\}|\{\{[\s\S]*?\}\})/g)
+  return parts.map((part, i) => {
+    if (!/^\{[%{]/.test(part)) return <span key={i}>{part}</span>
+    const invalid = part.startsWith('{%-') || part.endsWith('-%}')
+    return (
+      <span key={i} className={`font-mono ${invalid ? 'text-red-400' : 'text-amber-400/80'}`}>
+        {part}
+      </span>
+    )
+  })
+}
+
+function SegmentedLiquidField({
+  label,
+  hint,
+  value,
+  rows,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  value: string
+  rows: number
+  onChange: (v: string) => void
+}) {
+  const [editing, setEditing] = React.useState(false)
+  const hasLiquid = value.includes('{%') || value.includes('{{')
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+  // Auto-strip obligatorio: si detecta {%- o -%} los elimina inmediatamente
+  React.useEffect(() => {
+    if (value.includes('{%-') || value.includes('-%}')) {
+      onChange(value.replace(/\{%-/g, '{%').replace(/-%\}/g, '%}'))
+    }
+  }, [value])
+
+  function handleDivClick() {
+    setEditing(true)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">{label}</span>
+        {hint && <span className="text-[10px] text-neutral-700">{hint}</span>}
+      </div>
+      {hasLiquid && !editing ? (
+        <div
+          onClick={handleDivClick}
+          title="Clic para editar"
+          className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 font-mono leading-relaxed whitespace-pre-wrap cursor-text hover:border-neutral-500 transition-colors"
+        >
+          {renderLiquidText(value)}
+        </div>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onBlur={() => hasLiquid && setEditing(false)}
+          rows={rows}
+          spellCheck={false}
+          className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-neutral-500/30 leading-relaxed"
+        />
+      )}
+    </div>
+  )
 }
 
 function LiquidField({
@@ -420,40 +548,18 @@ function LiquidField({
   rows: number
   onChange: (v: string) => void
 }) {
-  const [copied, setCopied] = useState(false)
-
-  function handleCopy() {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">{label}</span>
-          {hint && <span className="text-[10px] text-neutral-700">{hint}</span>}
-        </div>
-        <button
-          onClick={handleCopy}
-          title="Copiar Liquid para pegar en CIO"
-          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${
-            copied
-              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
-              : 'bg-neutral-800 text-neutral-500 border-neutral-700 hover:text-neutral-300 hover:border-neutral-600'
-          }`}
-        >
-          {copied ? '✓ Copiado' : '📋 Copiar'}
-        </button>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">{label}</span>
+        {hint && <span className="text-[10px] text-neutral-700">{hint}</span>}
       </div>
       <textarea
         value={value}
         onChange={e => onChange(e.target.value)}
         rows={rows}
         spellCheck={false}
-        className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-2.5 py-2 text-xs text-neutral-300 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-neutral-500/30 hover:border-neutral-600 transition-colors leading-relaxed"
+        className="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-neutral-500/30 hover:border-neutral-600 transition-colors leading-relaxed"
       />
     </div>
   )
@@ -471,7 +577,7 @@ function NodeLiquidEditor({
   const isPush = nodo.tipo === 'push'
   return (
     <div className="space-y-3">
-      <LiquidField
+      <SegmentedLiquidField
         label={isPush ? 'Título (subject)' : 'Asunto (subject)'}
         hint={isPush ? '≤60 chars por rama' : '≤50 chars por rama'}
         value={copies.subject}
@@ -479,7 +585,7 @@ function NodeLiquidEditor({
         onChange={v => onChange({ ...copies, subject: v })}
       />
       {!isPush && (
-        <LiquidField
+        <SegmentedLiquidField
           label="Preheader"
           hint="≤85 chars por rama"
           value={copies.preheader ?? ''}
@@ -487,7 +593,7 @@ function NodeLiquidEditor({
           onChange={v => onChange({ ...copies, preheader: v })}
         />
       )}
-      <LiquidField
+      <SegmentedLiquidField
         label={isPush ? 'Cuerpo (body)' : 'Cuerpo email'}
         hint={isPush ? '≤180 chars por rama' : '≤500 chars por rama'}
         value={copies.cuerpo}
@@ -498,117 +604,504 @@ function NodeLiquidEditor({
   )
 }
 
-// ─── NodeColumnsEditor — wrapper para NodeLiquidEditor con header ─────────────
+// ─── Campaign Flow Canvas ─────────────────────────────────────────────────────
 
-function NodeColumnsEditor({
-  nodo,
-  copies,
-  onChange,
-}: {
-  nodo: StrategyNode
-  copies: NodeCopies
-  onChange: (c: NodeCopies) => void
-}) {
-  const isPush = nodo.tipo === 'push'
-  const delayLabel =
-    nodo.orden === 1
-      ? 'Al entrar al journey'
-      : nodo.delay_desde_anterior_horas < 24
-        ? `+${nodo.delay_desde_anterior_horas}h desde el mensaje anterior`
-        : `+${Math.round(nodo.delay_desde_anterior_horas / 24)} día${Math.round(nodo.delay_desde_anterior_horas / 24) !== 1 ? 's' : ''} desde el mensaje anterior`
+function fmtDelay(hours: number, isFirst: boolean): string {
+  if (isFirst) return 'Al entrar'
+  if (hours === 0) return 'Inmediato'
+  if (hours < 1) return `${Math.round(hours * 60)} min`
+  if (hours < 24) return `${hours}h`
+  if (hours === 24) return '1 día'
+  if (hours % 24 === 0) return `${hours / 24} días`
+  return `${hours}h`
+}
 
+function isLiquidExpr(s: unknown): boolean {
+  return typeof s === 'string' && s.includes('{%')
+}
+
+function subjectPreview(subject: unknown): string {
+  const s = typeof subject === 'string' ? subject : ''
+  if (!s) return ''
+  if (isLiquidExpr(s)) {
+    const m = s.match(/\{%-?\s*if[^%]*%\}([\s\S]*?)\{%-?\s*elsif/)
+    const preview = m ? m[1].trim() : ''
+    return preview.slice(0, 50) + (preview.length > 50 ? '…' : '') || 'Personalizado por perfil'
+  }
+  return s.slice(0, 50) + (s.length > 50 ? '…' : '')
+}
+
+function FlowConnector({ label }: { label: string }) {
   return (
-    <div className="bg-neutral-800/40 rounded-xl border border-neutral-800 overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base leading-none">{isPush ? '🔔' : '📧'}</span>
-          <span className="text-white text-sm font-semibold">
-            {nodo.nombre ?? `${isPush ? 'Push' : 'Email'} ${nodo.orden}`}
-          </span>
-          <span className="text-neutral-600 text-xs">· {delayLabel}</span>
-        </div>
-        <span className="text-neutral-700 text-[10px]">
-          Liquid — 3 ramas: Conservador · Moderado+Arriesgado · sin perfil
+    <div className="flex flex-col items-center" style={{ width: 280 }}>
+      <div className="w-px h-5 bg-neutral-700/60" />
+      {label && (
+        <span className="text-[10px] text-neutral-600 font-medium px-2.5 py-0.5 bg-[#0a0a0a] rounded-full border border-neutral-800 z-10 -my-0.5">
+          {label}
         </span>
-      </div>
-      <div className="p-4">
-        <NodeLiquidEditor nodo={nodo} copies={copies} onChange={onChange} />
+      )}
+      <div className="w-px h-5 bg-neutral-700/60" />
+    </div>
+  )
+}
+
+function FlowTriggerNode({ label }: { label: string }) {
+  return (
+    <div style={{ width: 280 }}>
+      <div className="w-full px-4 py-3 bg-emerald-500/8 border border-emerald-500/20 rounded-xl">
+        <div className="text-[9px] text-emerald-500/50 font-semibold uppercase tracking-widest mb-1">Entra cuando</div>
+        <div className="text-emerald-300 text-xs font-medium truncate">{label}</div>
       </div>
     </div>
   )
 }
 
-// ─── NodeTimeline — timeline horizontal + panel por nodo seleccionado ─────────
+function FlowGoalNode({ label }: { label: string }) {
+  return (
+    <div style={{ width: 280 }}>
+      <div className="w-full px-4 py-3 bg-sky-500/8 border border-sky-500/20 rounded-xl">
+        <div className="text-[9px] text-sky-500/50 font-semibold uppercase tracking-widest mb-1">Convierte en</div>
+        <div className="text-sky-300 text-xs font-medium truncate">{label}</div>
+      </div>
+    </div>
+  )
+}
 
-function NodeTimeline({
-  nodos,
-  selectedOrden,
-  edits,
-  onSelect,
-  onNodeEdit,
+type NodeUpdateStatus = 'idle' | 'loading' | 'success' | 'error'
+
+function FlowMessageNode({
+  nodo,
+  isSelected,
+  onClick,
+  updateStatus = 'idle',
 }: {
-  nodos: StrategyNode[]
-  selectedOrden: number | null
-  edits: ActionEdit
-  onSelect: (orden: number | null) => void
-  onNodeEdit: (nodeOrden: number, copies: NodeCopies) => void
+  nodo: StrategyNode
+  isSelected: boolean
+  onClick: () => void
+  updateStatus?: NodeUpdateStatus
 }) {
-  const selectedNodo = nodos.find(n => n.orden === selectedOrden) ?? null
+  const isPush      = nodo.tipo === 'push'
+  const hasPerfiles = isLiquidExpr(nodo.subject) || isLiquidExpr(nodo.cuerpo)
+  const preview     = subjectPreview(nodo.subject)
+  const modificado  = nodo.modificado !== false
+  const sinCambios  = nodo.modificado === false
+
+  const badge = updateStatus === 'success'
+    ? <span className="ml-auto text-[9px] text-emerald-400 font-semibold tracking-wide">✓ Listo</span>
+    : (modificado && !sinCambios)
+      ? <span className="ml-auto text-[9px] text-amber-400 font-semibold tracking-wide">● Cambios</span>
+      : null
 
   return (
-    <div>
-      <div className="flex items-center overflow-x-auto py-1 gap-0">
-        {nodos.map((nodo, i) => {
-          const isSelected = nodo.orden === selectedOrden
-          const delayShort =
-            nodo.delay_desde_anterior_horas < 24
-              ? `${nodo.delay_desde_anterior_horas}h`
-              : `${Math.round(nodo.delay_desde_anterior_horas / 24)}d`
-
-          return (
-            <div key={nodo.orden} className="flex items-center shrink-0">
-              {i > 0 && (
-                <div className="flex items-center shrink-0">
-                  <div className="w-4 h-px bg-neutral-700" />
-                  <span className="text-[10px] text-neutral-600 px-1 whitespace-nowrap">{delayShort}</span>
-                  <div className="w-4 h-px bg-neutral-700" />
-                </div>
-              )}
-              <button
-                onClick={() => onSelect(isSelected ? null : nodo.orden)}
-                title={isSelected ? 'Cerrar' : `Editar ${nodo.nombre ?? `${nodo.tipo === 'push' ? 'Push' : 'Email'} ${nodo.orden}`}`}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                  isSelected
-                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10'
-                    : 'bg-neutral-800/50 border-neutral-700/40 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600'
-                }`}
-              >
-                <span className="text-sm leading-none">{nodo.tipo === 'push' ? '🔔' : '📧'}</span>
-                <span>{nodo.nombre ?? `${nodo.tipo === 'push' ? 'Push' : 'Email'} ${nodo.orden}`}</span>
-              </button>
-            </div>
-          )
-        })}
-        <span className="text-[10px] text-neutral-700 ml-4 shrink-0 whitespace-nowrap">
-          {nodos.length} mensaje{nodos.length !== 1 ? 's' : ''} · clic para editar
+    <motion.div
+      onClick={sinCambios ? undefined : onClick}
+      animate={{
+        boxShadow: isSelected
+          ? '0 0 0 2px rgba(251,191,36,0.45), 0 4px 20px rgba(251,191,36,0.10)'
+          : '0 0 0 0px transparent',
+      }}
+      transition={{ duration: 0.15 }}
+      style={{ width: 280 }}
+      className={`rounded-xl overflow-hidden border transition-colors duration-150 ${
+        sinCambios
+          ? 'border-neutral-800 bg-neutral-900/50 opacity-40 cursor-default'
+          : isSelected
+            ? 'border-amber-400/50 bg-neutral-900 cursor-pointer'
+            : isPush
+              ? 'border-sky-500/20 bg-neutral-900 hover:border-sky-500/40 cursor-pointer'
+              : 'border-violet-500/20 bg-neutral-900 hover:border-violet-500/40 cursor-pointer'
+      }`}
+    >
+      <div className={`px-3 py-1.5 flex items-center gap-2 ${
+        sinCambios ? 'bg-neutral-800/30' : isPush ? 'bg-sky-500/8' : 'bg-violet-500/8'
+      }`}>
+        <span className="text-sm leading-none">{isPush ? '📱' : '✉️'}</span>
+        <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+          sinCambios ? 'text-neutral-600' : isPush ? 'text-sky-400' : 'text-violet-400'
+        }`}>
+          {isPush ? 'Push' : 'Email'}
         </span>
+        {badge}
+        {!modificado && hasPerfiles && (
+          <span className="ml-auto text-[9px] text-amber-400/55 font-medium">Por perfil</span>
+        )}
+      </div>
+      <div className="px-3 py-2.5">
+        <div className={`text-xs font-semibold leading-tight truncate ${sinCambios ? 'text-neutral-600' : 'text-white'}`}>
+          {nodo.nombre ?? `${isPush ? 'Push' : 'Email'} ${nodo.orden}`}
+        </div>
+        {sinCambios
+          ? <div className="text-neutral-700 text-[10px] mt-0.5 italic">Sin cambio</div>
+          : preview
+            ? <div className="text-neutral-500 text-[11px] leading-tight truncate mt-0.5">{preview}</div>
+            : null
+        }
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Strategy Loader ─────────────────────────────────────────────────────────
+
+
+
+const LOADER_STEPS_PHASE1 = [
+  'Leyendo la predicción del modelo y señales SHAP...',
+  'Consultando el estado de tus campañas en Customer.io...',
+  'Procesando noticias, contexto de mercado y la semana...',
+  'Cruzando señales del modelo con el diagnóstico del funnel...',
+  'Claude está escribiendo la estrategia...',
+]
+
+const LOADER_STEPS_PHASE2 = [
+  'Cargando estructura y copies reales de cada campaña...',
+  'Revisando cadencia, delays y cantidad de nodos...',
+  'Comparando con el contexto de mercado de esta semana...',
+  'Detectando oportunidades que el modelo no priorizó...',
+  'Claude está construyendo las recomendaciones...',
+]
+
+function StrategyLoader({ awaitingMcp }: { awaitingMcp: boolean }) {
+  const steps = awaitingMcp ? LOADER_STEPS_PHASE2 : LOADER_STEPS_PHASE1
+  const [activeStep, setActiveStep] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setActiveStep(s => Math.min(s + 1, steps.length - 1)), 5500)
+    return () => clearInterval(id)
+  }, [steps.length])
+
+  // circumferences: r28 → 175.9 · r19 → 119.4 · r10 → 62.8
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-8 py-7 flex items-center gap-8">
+
+      {/* Anillos concéntricos — estilo Apple/SpaceX */}
+      <div className="shrink-0 relative flex items-center justify-center" style={{ width: 72, height: 72 }}>
+        {/* Tracks — guías casi invisibles */}
+        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" className="absolute inset-0">
+          <circle cx="36" cy="36" r="28" stroke="white" strokeOpacity="0.05" strokeWidth="1" />
+          <circle cx="36" cy="36" r="19" stroke="white" strokeOpacity="0.05" strokeWidth="1" />
+          <circle cx="36" cy="36" r="10" stroke="white" strokeOpacity="0.05" strokeWidth="1" />
+        </svg>
+
+        {/* Arco exterior — lento, CW */}
+        <motion.svg width="72" height="72" viewBox="0 0 72 72" fill="none" className="absolute inset-0"
+          animate={{ rotate: 360 }} transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
+          style={{ transformOrigin: '36px 36px' }}>
+          <circle cx="36" cy="36" r="28"
+            stroke="rgba(251,191,36,0.55)" strokeWidth="1.1" strokeLinecap="round"
+            strokeDasharray="66 110" />
+        </motion.svg>
+
+        {/* Arco medio — medio, CCW */}
+        <motion.svg width="72" height="72" viewBox="0 0 72 72" fill="none" className="absolute inset-0"
+          animate={{ rotate: -360 }} transition={{ duration: 4.5, repeat: Infinity, ease: 'linear' }}
+          style={{ transformOrigin: '36px 36px' }}>
+          <circle cx="36" cy="36" r="19"
+            stroke="rgba(251,191,36,0.75)" strokeWidth="1.3" strokeLinecap="round"
+            strokeDasharray="50 70" />
+        </motion.svg>
+
+        {/* Arco interior — rápido, CW */}
+        <motion.svg width="72" height="72" viewBox="0 0 72 72" fill="none" className="absolute inset-0"
+          animate={{ rotate: 360 }} transition={{ duration: 2.8, repeat: Infinity, ease: 'linear' }}
+          style={{ transformOrigin: '36px 36px' }}>
+          <circle cx="36" cy="36" r="10"
+            stroke="rgba(251,191,36,1)" strokeWidth="1.5" strokeLinecap="round"
+            strokeDasharray="22 41" />
+        </motion.svg>
+
+        {/* Punto central */}
+        <motion.div className="absolute w-1.5 h-1.5 rounded-full bg-amber-400"
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }} />
       </div>
 
-      {selectedNodo && (
-        <div className="mt-3">
-          <NodeColumnsEditor
-            nodo={selectedNodo}
-            copies={
-              edits.nodeEdits[selectedNodo.orden] ?? {
-                subject:   toLiquid(selectedNodo.subject as Parameters<typeof toLiquid>[0]),
-                preheader: selectedNodo.preheader ? toLiquid(selectedNodo.preheader as Parameters<typeof toLiquid>[0]) : undefined,
-                cuerpo:    toLiquid(selectedNodo.cuerpo as Parameters<typeof toLiquid>[0]),
-              }
-            }
-            onChange={c => onNodeEdit(selectedNodo.orden, c)}
-          />
+      {/* Texto — al lado derecho */}
+      <div className="flex-1 min-w-0">
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={activeStep}
+            initial={{ opacity: 0, x: 6 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -6 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="text-neutral-400 text-sm font-medium leading-snug"
+          >
+            {steps[activeStep]}
+          </motion.p>
+        </AnimatePresence>
+        <p className="text-neutral-700 text-xs mt-1">
+          {awaitingMcp ? 'Revisando cada campaña de forma independiente' : 'Integrando modelo, campañas, mercado y productos'}
+        </p>
+      </div>
+
+    </div>
+  )
+}
+
+function CampaignFlowCanvas({
+  nodos,
+  nodosPropuesta,
+  trigger,
+  goal,
+  edits,
+  onNodeEdit,
+  selectedOrden,
+  onSelect,
+  nodeUpdateStatus = {},
+  onUpdateNode,
+}: {
+  nodos: StrategyNode[]
+  nodosPropuesta: StrategyNode[]
+  trigger: string
+  goal: string
+  edits: ActionEdit
+  onNodeEdit: (nodeOrden: number, copies: NodeCopies) => void
+  selectedOrden: number | null
+  onSelect: (orden: number | null) => void
+  nodeUpdateStatus?: Record<number, NodeUpdateStatus>
+  onUpdateNode?: (nodo: StrategyNode, copies: NodeCopies) => void
+}) {
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(0.88)
+  const [dragging, setDragging] = useState(false)
+  const dragState = useRef({ active: false, hasDragged: false, startX: 0, startY: 0, panX: 0, panY: 0 })
+
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-no-drag]') || target.tagName === 'TEXTAREA') return
+      e.preventDefault()
+      const factor = e.deltaY < 0 ? 1.1 : 0.9
+      setZoom(z => Math.min(1.8, Math.max(0.28, z * factor)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Para el panel de edición: buscar en nodosPropuesta (tiene el orden correcto para edits)
+  const selectedEditNodo    = nodosPropuesta.find(n => n.orden === selectedOrden) ?? null
+  // Para el delay label y para el botón: buscar en todos los nodos (tiene id_nodo_cio, template_id)
+  const selectedDisplayNodo = nodos.find(n => n.orden === selectedOrden) ?? null
+
+  // Copies resueltos para el botón de actualizar (edits del usuario si editó, sino el propuesto)
+  const panelCopies: NodeCopies | null = selectedEditNodo
+    ? (edits.nodeEdits[selectedEditNodo.orden] ?? {
+        subject:   toLiquid(selectedEditNodo.subject   as Parameters<typeof toLiquid>[0]),
+        preheader: selectedEditNodo.preheader
+          ? toLiquid(selectedEditNodo.preheader as Parameters<typeof toLiquid>[0])
+          : undefined,
+        cuerpo:    toLiquid(selectedEditNodo.cuerpo    as Parameters<typeof toLiquid>[0]),
+      })
+    : null
+
+  const panelCanUpdate = selectedDisplayNodo != null
+    && selectedDisplayNodo.modificado !== false
+    && selectedDisplayNodo.id_nodo_cio != null
+    && selectedDisplayNodo.template_id != null
+
+  const panelUpdateStatus: NodeUpdateStatus = selectedDisplayNodo
+    ? (nodeUpdateStatus[selectedDisplayNodo.orden] ?? 'idle')
+    : 'idle'
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('[data-no-drag]')) return
+    dragState.current = { active: true, hasDragged: false, startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y }
+    setDragging(true)
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragState.current.active) return
+    const dx = e.clientX - dragState.current.startX
+    const dy = e.clientY - dragState.current.startY
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.current.hasDragged = true
+    setPan({ x: dragState.current.panX + dx, y: dragState.current.panY + dy })
+  }
+
+  function onPointerUp() {
+    dragState.current.active = false
+    setDragging(false)
+  }
+
+  const delayLabel = selectedDisplayNodo
+    ? selectedDisplayNodo.orden === 1
+      ? 'Al entrar al journey'
+      : selectedDisplayNodo.delay_desde_anterior_horas < 24
+        ? `+${selectedDisplayNodo.delay_desde_anterior_horas}h desde el anterior`
+        : `+${Math.round(selectedDisplayNodo.delay_desde_anterior_horas / 24)} día${Math.round(selectedDisplayNodo.delay_desde_anterior_horas / 24) !== 1 ? 's' : ''} desde el anterior`
+    : ''
+
+  return (
+    <div
+      ref={canvasRef}
+      className="relative rounded-xl overflow-hidden border border-neutral-800 select-none"
+      style={{
+        background: '#0a0a0a',
+        height: 'clamp(520px, 60vh, 660px)',
+        cursor: dragging ? 'grabbing' : 'grab',
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {/* Dot grid */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #1f1f1f 1.2px, transparent 1.2px)',
+          backgroundSize: '22px 22px',
+        }}
+      />
+
+      {/* Pannable + zoomable canvas */}
+      <div
+        className="absolute inset-0 flex items-start justify-center"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y + 28}px) scale(${zoom})`,
+          transformOrigin: 'top center',
+        }}
+      >
+        <div className="flex flex-col items-center pb-10">
+          <FlowTriggerNode label={trigger} />
+          {nodos.map((nodo, i) => {
+            // Resuelve el copy a enviar: edits del usuario si editó, sino el propuesto por Claude
+            const editNodo = nodosPropuesta.find(n => n.orden === nodo.orden)
+            const resolvedCopies: NodeCopies = editNodo
+              ? (edits.nodeEdits[editNodo.orden] ?? {
+                  subject:   toLiquid(editNodo.subject   as Parameters<typeof toLiquid>[0]),
+                  preheader: editNodo.preheader
+                    ? toLiquid(editNodo.preheader as Parameters<typeof toLiquid>[0])
+                    : undefined,
+                  cuerpo:    toLiquid(editNodo.cuerpo    as Parameters<typeof toLiquid>[0]),
+                })
+              : { subject: nodo.subject || '', cuerpo: nodo.cuerpo || '' }
+
+            return (
+              <div key={nodo.nombre ?? nodo.orden} className="flex flex-col items-center">
+                <FlowConnector label={fmtDelay(nodo.delay_desde_anterior_horas, i === 0)} />
+                <FlowMessageNode
+                  nodo={nodo}
+                  isSelected={nodo.orden === selectedOrden}
+                  onClick={() => {
+                    if (!dragState.current.hasDragged && nodo.modificado !== false)
+                      onSelect(nodo.orden === selectedOrden ? null : nodo.orden)
+                  }}
+                  updateStatus={nodeUpdateStatus[nodo.orden] ?? 'idle'}
+                />
+              </div>
+            )
+          })}
+          <FlowConnector label="" />
+          <FlowGoalNode label={goal} />
         </div>
-      )}
+      </div>
+
+      {/* Panel de edición — desliza desde la derecha dentro del canvas */}
+      <AnimatePresence>
+        {selectedEditNodo && (
+          <motion.div
+            key={selectedEditNodo.orden}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 32, stiffness: 340 }}
+            data-no-drag
+            onPointerDown={e => e.stopPropagation()}
+            className="absolute right-0 top-0 bottom-0 z-20 flex flex-col border-l border-neutral-800"
+            style={{
+              width: selectedEditNodo.tipo === 'email'
+                ? 'clamp(500px, 72%, 640px)'
+                : 'clamp(420px, 62%, 520px)',
+              background: 'rgba(10,10,10,0.97)',
+            }}
+          >
+            {/* Header */}
+            <div className={`px-4 py-3 border-b border-neutral-800 flex items-center gap-3 shrink-0 ${
+              selectedEditNodo.tipo === 'push' ? 'bg-sky-500/8' : 'bg-violet-500/8'
+            }`}>
+              <span className="text-base leading-none shrink-0">
+                {selectedEditNodo.tipo === 'push' ? '📱' : '✉️'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-xs font-semibold truncate">
+                  {selectedEditNodo.nombre ?? `${selectedEditNodo.tipo === 'push' ? 'Push' : 'Email'} ${selectedEditNodo.orden}`}
+                </div>
+                {(() => {
+                  const vals = panelCopies ? [panelCopies.subject, panelCopies.preheader, panelCopies.cuerpo].join(' ') : ''
+                  const hasWsc = vals.includes('{%-') || vals.includes('-%}')
+                  return hasWsc
+                    ? <span className="text-red-400 text-[10px] font-medium">⚠ Expresiones con guión detectadas — se limpian al guardar</span>
+                    : <span className="text-neutral-600 text-[10px]">{delayLabel}</span>
+                })()}
+              </div>
+              <button
+                data-no-drag
+                onClick={() => onSelect(null)}
+                className="shrink-0 w-6 h-6 rounded-md bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors flex items-center justify-center text-base leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Editor scrollable */}
+            <div className="kepler-scroll flex-1 overflow-y-auto p-4">
+              <NodeLiquidEditor
+                nodo={selectedEditNodo}
+                copies={
+                  edits.nodeEdits[selectedEditNodo.orden] ?? {
+                    subject:   toLiquid(selectedEditNodo.subject as Parameters<typeof toLiquid>[0]),
+                    preheader: selectedEditNodo.preheader
+                      ? toLiquid(selectedEditNodo.preheader as Parameters<typeof toLiquid>[0])
+                      : undefined,
+                    cuerpo:    toLiquid(selectedEditNodo.cuerpo as Parameters<typeof toLiquid>[0]),
+                  }
+                }
+                onChange={c => onNodeEdit(selectedEditNodo.orden, c)}
+              />
+            </div>
+
+            {/* Botón actualizar — fijo al fondo del panel */}
+            {panelCanUpdate && (
+              <div className="shrink-0 px-4 py-3 border-t border-neutral-800" data-no-drag>
+                {panelUpdateStatus === 'success' ? (
+                  <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-semibold">
+                    ✓ Actualizado en CIO
+                  </div>
+                ) : (
+                  <button
+                    data-no-drag
+                    onClick={() => {
+                      if (selectedDisplayNodo && panelCopies)
+                        onUpdateNode?.(selectedDisplayNodo, panelCopies)
+                    }}
+                    disabled={panelUpdateStatus === 'loading'}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold transition-colors border ${
+                      panelUpdateStatus === 'loading'
+                        ? 'bg-amber-500/10 text-amber-400/40 border-amber-500/10 cursor-not-allowed'
+                        : panelUpdateStatus === 'error'
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                    }`}
+                  >
+                    {panelUpdateStatus === 'loading' && (
+                      <span className="w-3 h-3 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin" />
+                    )}
+                    {panelUpdateStatus === 'loading'
+                      ? 'Actualizando...'
+                      : panelUpdateStatus === 'error'
+                        ? '✗ Error — reintentar'
+                        : 'Actualizar en CIO'}
+                  </button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -619,14 +1112,39 @@ function StrategyCanvasCard({
   edits,
   onToggle,
   onNodeEdit,
+  isOwnCampaign = false,
+  assignedTo = null,
 }: {
   action: StrategyAction
   actionIndex: number
   edits: ActionEdit
   onToggle: () => void
   onNodeEdit: (nodeOrden: number, copies: NodeCopies) => void
+  isOwnCampaign?: boolean
+  assignedTo?: string | null
 }) {
   const [selectedNodeOrden, setSelectedNodeOrden] = useState<number | null>(null)
+  const [razonExpanded, setRazonExpanded] = useState(false)
+  const [nodeUpdateStatus, setNodeUpdateStatus] = useState<Record<number, NodeUpdateStatus>>({})
+
+  async function handleUpdateNode(nodo: StrategyNode, copies: NodeCopies) {
+    if (!nodo.id_nodo_cio || !nodo.template_id) return
+    const orden = nodo.orden
+    setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'loading' }))
+    try {
+      await api.updateNode({
+        action_id:   nodo.id_nodo_cio,
+        template_id: nodo.template_id,
+        subject:     copies.subject,
+        cuerpo:      copies.cuerpo,
+        preheader:   copies.preheader,
+      })
+      setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'success' }))
+    } catch (err) {
+      console.error('[Kepler] Error actualizando nodo', nodo.id_nodo_cio, err)
+      setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'error' }))
+    }
+  }
   const tipo    = TIPO_CFG[action.tipo_accion]
   const isAlta  = action.prioridad === 'alta'
   const { included } = edits
@@ -682,20 +1200,31 @@ function StrategyCanvasCard({
 
       {/* Body */}
       <div className="p-5">
-        <h3 className="text-white font-semibold mb-0.5">{action.step_name}</h3>
-        <p className="text-neutral-600 text-xs mb-3">{action.step_code}</p>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <h3 className="text-white font-semibold">{action.campaña_existente_nombre ?? action.step_name}</h3>
+          {isOwnCampaign && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 shrink-0">
+              Tu campaña
+            </span>
+          )}
+          {assignedTo && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 shrink-0">
+              👤 {assignedTo}
+            </span>
+          )}
+        </div>
 
         {/* Razón */}
-        <p className="text-neutral-400 text-sm leading-relaxed mb-4">{action.razon}</p>
-
-        {/* Campaign metadata */}
-        <div className="bg-neutral-800/60 rounded-lg p-3.5 space-y-2 mb-4 text-xs">
-          <Row label="Journey"      value={<span className="font-mono text-neutral-200">{action.propuesta.nombre_campaña}</span>} />
-          <Row label="Entra cuando" value={<span className="font-mono text-sky-400">{action.propuesta.trigger_event}</span>} />
-          <Row label="Convierte en" value={<span className="font-mono text-emerald-400">{action.propuesta.conversion_event}</span>} />
-          {action.campaña_existente_nombre && (
-            <Row label="Optimizando" value={<span className="text-amber-400">{action.campaña_existente_nombre} #{action.campaña_existente_id}</span>} />
-          )}
+        <div className="mb-4">
+          <div className={`text-neutral-400 text-sm leading-relaxed overflow-hidden transition-all duration-300 ${razonExpanded ? '' : 'line-clamp-2'}`}>
+            {action.razon}
+          </div>
+          <button
+            onClick={() => setRazonExpanded(e => !e)}
+            className="mt-1.5 text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors"
+          >
+            {razonExpanded ? 'Ver menos ↑' : 'Ver más ↓'}
+          </button>
         </div>
 
         {/* Cambios de estructura — visible cuando Claude detecta problema estructural */}
@@ -737,13 +1266,18 @@ function StrategyCanvasCard({
               Creá la campaña en CIO con el trigger/goal indicados, o usá la herramienta Crear Campaña.
             </p>
           </div>
-        ) : action.propuesta.nodos.length > 0 ? (
-          <NodeTimeline
-            nodos={action.propuesta.nodos}
-            selectedOrden={selectedNodeOrden}
+        ) : (action.nodos_completos ?? action.propuesta.nodos ?? []).length > 0 ? (
+          <CampaignFlowCanvas
+            nodos={action.nodos_completos ?? action.propuesta.nodos ?? []}
+            nodosPropuesta={action.propuesta.nodos ?? []}
+            trigger={action.propuesta.trigger_event}
+            goal={action.propuesta.conversion_event}
             edits={edits}
-            onSelect={setSelectedNodeOrden}
             onNodeEdit={onNodeEdit}
+            selectedOrden={selectedNodeOrden}
+            onSelect={setSelectedNodeOrden}
+            nodeUpdateStatus={nodeUpdateStatus}
+            onUpdateNode={handleUpdateNode}
           />
         ) : null}
       </div>
@@ -760,175 +1294,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-// ─── Execution Preview ────────────────────────────────────────────────────────
-
-function ExecutionPreview({
-  strategy,
-  actionEdits,
-  safety,
-  executing,
-  onExecute,
-}: {
-  strategy: StrategyResult
-  actionEdits: Record<number, ActionEdit>
-  safety: SafetyStatus | null
-  executing: boolean
-  onExecute: () => void
-}) {
-  const included = strategy.acciones.filter((_, i) => actionEdits[i]?.included !== false)
-  const discarded = strategy.acciones.length - included.length
-
-  return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h2 className="text-white font-semibold mb-1">Ejecutar en Customer.io</h2>
-          <div className="flex items-center gap-3 text-xs mb-2">
-            <span className={included.length > 0 ? 'text-neutral-400' : 'text-neutral-600'}>
-              {included.length} de {strategy.acciones.length} acción(es) incluida(s)
-            </span>
-            {discarded > 0 && (
-              <span className="text-neutral-600">{discarded} descartada(s)</span>
-            )}
-          </div>
-          {included.length > 0 && (
-            <ul className="space-y-1">
-              {included.map((a, i) => (
-                <li key={i} className="flex items-center gap-1.5 text-xs text-neutral-500">
-                  <span className="text-amber-500 shrink-0">→</span>
-                  <span className="capitalize text-neutral-400">{a.tipo_accion}</span>
-                  <span className="font-mono text-neutral-600 shrink-0">{a.step_code}</span>
-                  <span className="text-neutral-700">·</span>
-                  <span className="truncate">{a.propuesta.nombre_campaña}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="shrink-0 text-right">
-          {safety?.cio_dry_run ? (
-            <>
-              <button
-                disabled
-                className="flex items-center gap-2 px-5 py-2.5 bg-neutral-800 text-neutral-500 font-semibold text-sm rounded-lg cursor-not-allowed border border-neutral-700"
-              >
-                🔒 Ejecutar
-              </button>
-              <p className="text-xs text-neutral-600 mt-1.5">CIO_DRY_RUN=true · bloqueado</p>
-            </>
-          ) : included.length === 0 ? (
-            <button disabled className="px-5 py-2.5 bg-neutral-800 text-neutral-600 font-semibold text-sm rounded-lg cursor-not-allowed">
-              Sin acciones incluidas
-            </button>
-          ) : (
-            <button
-              onClick={onExecute}
-              disabled={executing}
-              className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              {executing ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-neutral-800 border-t-transparent rounded-full animate-spin" />
-                  Ejecutando…
-                </>
-              ) : (
-                `⚡ Ejecutar ${included.length} acción${included.length !== 1 ? 'es' : ''}`
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {safety?.cio_dry_run && (
-        <div className="mt-4 bg-neutral-800/50 rounded-lg px-4 py-3 text-xs text-neutral-500">
-          Para activar: cambia{' '}
-          <code className="text-neutral-300 bg-neutral-700 px-1 rounded">CIO_DRY_RUN=false</code>{' '}
-          en <code className="text-neutral-300 bg-neutral-700 px-1 rounded">.env</code> y reinicia el backend.
-          <span className="text-amber-500/70 ml-2">⚠ Revisa el diagnóstico antes de activar escrituras.</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Strategy Historial Selector ─────────────────────────────────────────────
-
-function StrategyHistorialSelector({
-  history,
-  current,
-  onSelect,
-}: {
-  history: StrategyResult[]
-  current: StrategyResult
-  onSelect: (r: StrategyResult) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [])
-
-  if (history.length <= 1) return null
-
-  const estadoColor = (e: string) =>
-    e === 'anomalia_critica' ? 'text-red-400' :
-    e === 'anomalia_leve'    ? 'text-amber-400' : 'text-emerald-400'
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-lg px-3 py-2 transition-colors"
-      >
-        Historial
-        <span className="text-xs bg-neutral-700 text-neutral-300 rounded px-1.5 py-0.5">
-          {history.length}
-        </span>
-        <span className="text-xs">{open ? '▲' : '▼'}</span>
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full mt-1 w-80 bg-neutral-800 border border-neutral-700 rounded-xl shadow-xl z-10 overflow-hidden">
-          {history.map((item, i) => {
-            const isActive = item._id
-              ? item._id === current._id
-              : item.semana_label === current.semana_label
-            return (
-              <button
-                key={item._id ?? i}
-                onClick={() => { onSelect(item); setOpen(false) }}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-amber-500/10 text-amber-300'
-                    : 'text-neutral-300 hover:bg-neutral-700'
-                }`}
-              >
-                <span className="text-left min-w-0 flex-1 mr-2">
-                  <span className="block truncate text-sm">{item.semana_label ?? 'Sin semana'}</span>
-                  <span className={`block text-xs mt-0.5 ${estadoColor(item.estado_funnel)}`}>
-                    {item.estado_funnel === 'anomalia_critica' ? 'Anomalía crítica' :
-                     item.estado_funnel === 'anomalia_leve'    ? 'Anomalía leve'    : 'Estable'}
-                  </span>
-                </span>
-                {i === 0 && (
-                  <span className="text-[10px] bg-amber-500/20 text-amber-400 rounded px-1.5 py-0.5 shrink-0">
-                    última
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ─── Estado Funnel Badge ──────────────────────────────────────────────────────
 
@@ -937,6 +1302,13 @@ const ESTADO_CFG = {
   anomalia_leve:    { label: 'Anomalía leve',     cls: 'bg-amber-500/12 text-amber-400 border-amber-500/25' },
   anomalia_critica: { label: 'Anomalía crítica',  cls: 'bg-red-500/12 text-red-400 border-red-500/25' },
 }
+
+const KPI_CFG = {
+  positivo:   'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+  alerta:     'bg-red-500/10     text-red-400     border-red-500/20',
+  neutro:     'bg-neutral-800   text-neutral-300  border-neutral-700',
+  oportunidad:'bg-amber-500/10  text-amber-300    border-amber-500/20',
+} as const
 
 // ─── System Context Panel ─────────────────────────────────────────────────────
 
@@ -1203,7 +1575,7 @@ function initEdits(s: StrategyResult): Record<number, ActionEdit> {
   const edits: Record<number, ActionEdit> = {}
   s.acciones.forEach((a, i) => {
     const nodeEdits: Record<number, NodeCopies> = {}
-    a.propuesta.nodos.forEach(n => {
+    ;(a.propuesta.nodos ?? []).forEach(n => {
       nodeEdits[n.orden] = {
         subject:   toLiquid(n.subject as Parameters<typeof toLiquid>[0]),
         preheader: n.preheader ? toLiquid(n.preheader as Parameters<typeof toLiquid>[0]) : undefined,
@@ -1224,15 +1596,11 @@ export default function EstrategiaPage() {
   const [syncing, setSyncing]             = useState(false)
   const [syncResult, setSyncResult]       = useState<SyncResult | null>(null)
   const [generating, setGenerating]       = useState(false)
-  const [awaitingMcp, setAwaitingMcp]     = useState(false)
-  const [phase1Result, setPhase1Result]   = useState<StrategyResult | null>(null)
   const [contextoAdicional, setContextoAdicional] = useState('')
-  const [estructuraCampana, setEstructuraCampana] = useState('')
   const [strategy, setStrategy]           = useState<StrategyResult | null>(null)
-  const [history, setHistory]             = useState<StrategyResult[]>([])
   const [actionEdits, setActionEdits]     = useState<Record<number, ActionEdit>>({})
-  const [executing, setExecuting]         = useState(false)
-  const [executed, setExecuted]           = useState<ExecuteResult | null>(null)
+  const [resumenExpanded, setResumenExpanded] = useState(false)
+  const [structuralResumenExpanded, setStructuralResumenExpanded] = useState(false)
   const [error, setError]                 = useState<string | null>(null)
   const [genError, setGenError]           = useState<string | null>(null)
   const [sysCtx, setSysCtx]               = useState<SystemContext | null>(null)
@@ -1244,8 +1612,81 @@ export default function EstrategiaPage() {
   const [structuralGenerating, setStructuralGenerating] = useState(false)
   const [structuralError, setStructuralError]         = useState<string | null>(null)
   const [structuralEdits, setStructuralEdits]         = useState<Record<number, ActionEdit>>({})
-  const [detallesCampanas, setDetallesCampanas]       = useState('')
   const [latestPredLabel, setLatestPredLabel]         = useState<string | null>(null)
+
+  // ── Sesión y asignaciones ───────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState<{ name: string; role: 'admin' | 'agent'; campaign?: string } | null>(null)
+  const [userCampaign, setUserCampaign]     = useState<string | null>(null)
+  // Mapa campaña→persona para el badge de admin (ej: { "Fotos KYC": "Felipe" })
+  const [campaignOwnerMap, setCampaignOwnerMap] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(u => { if (u) setCurrentUser(u) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    if (currentUser.role === 'admin') {
+      // Admin con campaña propia (ej: Juanita)
+      setUserCampaign(currentUser.campaign ?? null)
+      // Cargar todas las asignaciones para mostrar badge en cada card
+      api.getAssignments()
+        .then(rows => {
+          const map: Record<string, string> = {}
+          rows.forEach(r => { map[r.campaign_name] = r.user_name })
+          setCampaignOwnerMap(map)
+        })
+        .catch(() => {})
+      return
+    }
+
+    // Agente: obtener su campaña asignada desde el backend
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/strategy/assignment?user_name=${currentUser.name}`)
+      .then(r => r.json())
+      .then(d => setUserCampaign(d.campaign ?? null))
+      .catch(() => {})
+  }, [currentUser])
+
+  const isAgent = currentUser?.role === 'agent'
+
+  // Filtra acciones: admin ve todo, agente solo su campaña
+  function filterAcciones(acciones: StrategyAction[]): StrategyAction[] {
+    if (!isAgent) return acciones
+    if (!userCampaign) return []
+    return acciones.filter(a => matchesCampaign(a, userCampaign))
+  }
+
+  function matchesCampaign(action: StrategyAction, campaign: string): boolean {
+    const c = campaign.toLowerCase()
+    return (
+      (action.step_name ?? '').toLowerCase().includes(c) ||
+      (action.campaña_existente_nombre ?? '').toLowerCase().includes(c)
+    )
+  }
+
+  // Badge: true si esta acción es la campaña propia del usuario
+  function isOwnCampaign(action: StrategyAction): boolean {
+    if (!userCampaign) return false
+    return matchesCampaign(action, userCampaign)
+  }
+
+  // Badge: nombre del dueño de esta campaña (para admin)
+  function getCampaignOwner(action: StrategyAction): string | null {
+    for (const [campName, ownerName] of Object.entries(campaignOwnerMap)) {
+      if (matchesCampaign(action, campName)) return ownerName
+    }
+    return null
+  }
+
+  // Visibilidad de secciones para agentes
+  const agentHasMode1 = isAgent && !!strategy && filterAcciones(strategy.acciones).length > 0
+  const agentHasMode2 = isAgent && !!structuralResult && filterAcciones(structuralResult.acciones).length > 0
+  const showMode1Section = !isAgent || agentHasMode1
+  const showMode2Section = !isAgent || (agentHasMode2 && !agentHasMode1)
 
   useEffect(() => {
     // Signal 1: localStorage flag set explicitly by ingresar page after nueva proyección
@@ -1278,7 +1719,6 @@ export default function EstrategiaPage() {
         return
       }
 
-      setHistory(histData)
       if (latestStrat) {
         setStrategy(latestStrat)
         setActionEdits(initEdits(latestStrat))
@@ -1297,35 +1737,6 @@ export default function EstrategiaPage() {
       api.getFunnelHealth().then(setHealth).catch(() => setHealth([])).finally(() => setHealthLoading(false))
     }).catch(() => setHealthLoading(false))
   }, [])
-
-  // Build executable strategy: apply edits, filter to included-only
-  function buildExecutableStrategy(): StrategyResult {
-    if (!strategy) throw new Error('No strategy')
-    const acciones = strategy.acciones
-      .map((a, i) => ({ a, i }))
-      .filter(({ i }) => actionEdits[i]?.included !== false)
-      .map(({ a, i }) => {
-        const edits = actionEdits[i]
-        if (!edits) return a
-        return {
-          ...a,
-          propuesta: {
-            ...a.propuesta,
-            nodos: a.propuesta.nodos.map(n => {
-              const ne = edits.nodeEdits[n.orden]
-              if (!ne) return n
-              return {
-                ...n,
-                subject:   ne.subject,
-                preheader: ne.preheader ?? (n.preheader ? toLiquid(n.preheader as Parameters<typeof toLiquid>[0]) : undefined),
-                cuerpo:    ne.cuerpo,
-              }
-            }),
-          },
-        }
-      })
-    return { ...strategy, acciones }
-  }
 
   async function handleLoadSysCtx() {
     if (sysCtx && sysOpen) { setSysOpen(false); return }
@@ -1357,72 +1768,22 @@ export default function EstrategiaPage() {
     }
   }
 
-  // Fase 1: analiza SHAP + campañas, determina qué info de campaña necesita
   async function handleStartAnalysis() {
     setGenerating(true)
     setGenError(null)
     setStrategy(null)
-    setPhase1Result(null)
-    setAwaitingMcp(false)
-    setEstructuraCampana('')
-    setExecuted(null)
     setStructuralResult(null)
     setStructuralEdits({})
-    setDetallesCampanas('')
     setStructuralError(null)
     try {
-      const s = await api.generateStrategy(contextoAdicional.trim() || undefined, undefined)
-      const needsEnrich = s.acciones.some(
-        a => ['optimizar', 'reforzar'].includes(a.tipo_accion) && a.campaña_existente_id
-      )
-      if (needsEnrich) {
-        setPhase1Result(s)
-        setAwaitingMcp(true)
-      } else {
-        // Solo gaps / crear — no hay campañas existentes que enriquecer, mostrar directo
-        setStrategy(s)
-        setActionEdits(initEdits(s))
-        setHistory(prev => [s, ...prev])
-      }
-    } catch (e) {
-      setGenError(e instanceof Error ? e.message : 'Error al analizar')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  // Fase 2: genera la estrategia final con los datos de campaña provistos
-  async function handleGenerateStrategy() {
-    setGenerating(true)
-    setGenError(null)
-    try {
-      const s = await api.generateStrategy(
-        contextoAdicional.trim() || undefined,
-        estructuraCampana.trim() || undefined,
-      )
+      const s = await api.generateStrategy(contextoAdicional.trim() || undefined)
       setStrategy(s)
       setActionEdits(initEdits(s))
-      setHistory(prev => [s, ...prev])
-      setAwaitingMcp(false)
-      setPhase1Result(null)
+      setResumenExpanded(false)
     } catch (e) {
       setGenError(e instanceof Error ? e.message : 'Error al generar estrategia')
     } finally {
       setGenerating(false)
-    }
-  }
-
-  async function handleExecute() {
-    if (!strategy) return
-    const executableStrategy = buildExecutableStrategy()
-    if (executableStrategy.acciones.length === 0) return
-    setExecuting(true)
-    try {
-      setExecuted(await api.executeStrategy(executableStrategy))
-    } catch (e) {
-      setGenError(e instanceof Error ? e.message : 'Error al ejecutar')
-    } finally {
-      setExecuting(false)
     }
   }
 
@@ -1432,7 +1793,7 @@ export default function EstrategiaPage() {
     setStructuralError(null)
     setStructuralResult(null)
     try {
-      const r = await api.generateStructural(detallesCampanas.trim(), strategy, contextoAdicional.trim() || undefined)
+      const r = await api.generateStructural(strategy, contextoAdicional.trim() || undefined)
       setStructuralResult(r)
       setStructuralEdits(initEdits(r))
     } catch (e) {
@@ -1440,12 +1801,6 @@ export default function EstrategiaPage() {
     } finally {
       setStructuralGenerating(false)
     }
-  }
-
-  function handleSelectHistory(s: StrategyResult) {
-    setStrategy(s)
-    setActionEdits(initEdits(s))
-    setExecuted(null)
   }
 
   function toggleAction(i: number) {
@@ -1485,20 +1840,11 @@ export default function EstrategiaPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {safety && (
-              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                safety.cio_dry_run
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              }`}>
-                {safety.cio_dry_run ? '🔒 Modo seguro' : '⚡ Escrituras activas'}
-              </span>
-            )}
+          {!isAgent && (
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 rounded-lg transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 rounded-lg transition-colors disabled:opacity-40 shrink-0"
             >
               {syncing ? (
                 <>
@@ -1507,7 +1853,7 @@ export default function EstrategiaPage() {
                 </>
               ) : '↻ Correr diagnóstico'}
             </button>
-          </div>
+          )}
         </div>
 
         {/* Feedback */}
@@ -1531,21 +1877,11 @@ export default function EstrategiaPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-white font-semibold text-lg">Diagnóstico del Funnel</h2>
-              <p className="text-neutral-500 text-xs mt-0.5">
-                {healthLoading
-                  ? 'Cargando…'
-                  : health
-                  ? `${campaignViews.length} campañas activas · ${trueGaps.length} pasos sin cobertura`
-                  : 'Corré el diagnóstico para ver el estado del funnel'}
-              </p>
-            </div>
-            <div className="hidden sm:flex items-center gap-4 text-xs text-neutral-500">
-              {(['verde', 'amarillo', 'rojo', 'spike'] as const).map(h => (
-                <div key={h} className="flex items-center gap-1">
-                  <span className={`w-2 h-2 rounded-full ${H_STYLES[h].dot}`} />
-                  <span>{H_LEGEND[h]}</span>
-                </div>
-              ))}
+              {!healthLoading && health && (
+                <p className="text-neutral-500 text-xs mt-0.5">
+                  {campaignViews.length} campañas activas · {trueGaps.length} pasos sin cobertura
+                </p>
+              )}
             </div>
           </div>
 
@@ -1569,41 +1905,33 @@ export default function EstrategiaPage() {
 
         {/* ── Strategy Generation ───────────────────────────────────────────── */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-white font-semibold text-lg">Estrategia con Claude</h2>
-              <p className="text-neutral-500 text-xs mt-0.5">
-                Genera la propuesta basada en SHAP del modelo + diagnóstico CIO + mercado
-              </p>
-            </div>
-            {strategy && (
-              <StrategyHistorialSelector
-                history={history}
-                current={strategy}
-                onSelect={handleSelectHistory}
-              />
-            )}
+          <div className="mb-4">
+            <h2 className="text-white font-semibold text-lg">Estrategia semanal</h2>
           </div>
 
           {/* ── Paso 1: formulario inicial ── */}
-          {!strategy && !generating && !awaitingMcp && (
+          {!strategy && !generating && (
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-5">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-xl">⚡</span>
+                <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center shrink-0 mt-0.5 border border-neutral-700">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-amber-400">
+                    <path d="M9 2C9 2 5 4 5 9C5 11.8 6.5 13.5 9 14C11.5 13.5 13 11.8 13 9C13 4 9 2 9 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                    <path d="M6 9C6 9 7 10.5 9 11C11 10.5 12 9 12 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    <path d="M9 14V16" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    <path d="M7 16H11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-white font-semibold mb-1">Análisis semanal con Claude</h3>
-                  <p className="text-neutral-400 text-sm leading-relaxed">
-                    Claude analiza el SHAP del modelo, el estado de tus campañas en CIO,
-                    el contexto de mercado y el catálogo de productos Trii.
+                  <h3 className="text-white font-semibold mb-1">Genera la estrategia de esta semana</h3>
+                  <p className="text-neutral-500 text-sm leading-relaxed">
+                    Cruza la predicción del modelo con tus campañas, noticias de la semana e iniciativas de trii para decidir qué optimizar y cómo.
                   </p>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs text-neutral-500 uppercase tracking-wider font-medium mb-2">
-                  Contexto de mercado <span className="text-neutral-700 normal-case">(opcional)</span>
+                  Noticias, iniciativas y contexto de esta semana
                 </label>
                 <textarea
                   value={contextoAdicional}
@@ -1617,127 +1945,19 @@ export default function EstrategiaPage() {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 text-xs text-neutral-600">
-                  <span>~30–60 seg</span>
-                  <span>·</span>
-                  <span>~$0.01 USD</span>
-                  <span>·</span>
-                  <span>Sin escrituras en CIO</span>
-                </div>
+              <div className="flex items-center justify-end gap-2">
                 <button
                   onClick={handleStartAnalysis}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-lg transition-colors"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-lg transition-colors"
                 >
-                  ⚡ Iniciar análisis
+                  Iniciar análisis
                 </button>
               </div>
             </div>
           )}
 
           {/* ── Loading ── */}
-          {generating && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <span className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${awaitingMcp ? 'border-violet-500' : 'border-amber-500'}`} />
-                <p className="text-white font-medium">
-                  {awaitingMcp ? 'Generando estrategia con datos completos…' : 'Analizando campañas y modelo…'}
-                </p>
-              </div>
-              <p className="text-neutral-500 text-sm">
-                {awaitingMcp
-                  ? 'Claude procesa los datos reales de las campañas para generar diffs específicos · ~60–120s'
-                  : 'Procesando SHAP + diagnóstico CIO + contexto de mercado · ~30–60s'}
-              </p>
-              <div className="flex items-center justify-center gap-1.5 mt-4">
-                {(awaitingMcp
-                  ? ['Datos CIO', 'SHAP', 'Campañas', 'Diffs', 'Estrategia']
-                  : ['SHAP', 'Campañas', 'Contexto', 'Diagnóstico', 'Análisis']
-                ).map((label, i) => (
-                  <span key={label} className="text-xs text-neutral-600 animate-pulse" style={{ animationDelay: `${i * 0.3}s` }}>
-                    {label}{i < 4 ? ' →' : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Paso 2: datos de campañas (intermedio) ── */}
-          {awaitingMcp && !generating && phase1Result && (() => {
-            const allFlagged = phase1Result.acciones.filter(
-              a => ['optimizar', 'reforzar'].includes(a.tipo_accion) && a.campaña_existente_id
-            )
-            // Máximo 2 campañas — priorizamos las de prioridad alta primero
-            const flagged = allFlagged
-              .sort((a, b) => (a.prioridad === 'alta' ? -1 : 1) - (b.prioridad === 'alta' ? -1 : 1))
-              .slice(0, 2)
-            return (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="text-lg">🔍</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold mb-1">Necesito los datos actuales de estas campañas</h3>
-                    <p className="text-neutral-400 text-sm leading-relaxed">
-                      {allFlagged.length > 2
-                        ? <>El modelo señaló {allFlagged.length} campañas — te pido las <strong className="text-white">2 de mayor prioridad</strong> para evitar confusiones en el análisis.</>
-                        : <>Detecté {flagged.length} campaña{flagged.length !== 1 ? 's' : ''} que necesitan optimización.</>
-                      }
-                      {' '}Pegá el contenido desde Claude.ai con el MCP de CIO.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Campañas marcadas */}
-                <div className="space-y-2">
-                  <p className="text-xs text-neutral-500 uppercase tracking-wider font-medium">
-                    Campañas a incluir{allFlagged.length > 2 && <span className="ml-1 text-violet-500/70 font-normal normal-case tracking-normal">(top 2 de {allFlagged.length})</span>}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {flagged.map(a => (
-                      <div key={a.campaña_existente_id} className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/8 border border-violet-500/20 rounded-lg">
-                        <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
-                        <span className="text-violet-200 text-xs font-medium">{a.campaña_existente_nombre ?? a.campaña_existente_id}</span>
-                        <span className="text-violet-600 text-[10px] font-mono">#{a.campaña_existente_id}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Textarea MCP */}
-                <div>
-                  <label className="block text-xs text-neutral-500 uppercase tracking-wider font-medium mb-2">
-                    Contenido de las campañas <span className="text-red-500/70">*</span>
-                    <span className="ml-2 text-neutral-600 normal-case tracking-normal font-normal">— máx. 2 campañas</span>
-                  </label>
-                  <textarea
-                    value={estructuraCampana}
-                    onChange={e => setEstructuraCampana(e.target.value)}
-                    rows={6}
-                    placeholder={`Formato por sección (máx. 2 campañas):\n\n## C4 — Fotos KYC | ID: 4403\nTrigger: data_validation_information_completed\nGoal: photo_validation_completed\n\nPush 1 (0.25h): subject · body\n...`}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3.5 py-3 text-sm text-neutral-200 placeholder:text-neutral-600 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500/40 hover:border-neutral-600 transition-colors leading-relaxed font-mono"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => { setAwaitingMcp(false); setPhase1Result(null) }}
-                    className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
-                  >
-                    ← Volver al inicio
-                  </button>
-                  <button
-                    onClick={handleGenerateStrategy}
-                    disabled={!estructuraCampana.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg transition-colors"
-                  >
-                    Generar estrategia
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
+          {generating && <StrategyLoader awaitingMcp={false} />}
 
           {/* ── Error ── */}
           {genError && !generating && (
@@ -1745,7 +1965,7 @@ export default function EstrategiaPage() {
               <p className="text-red-400 text-sm font-medium mb-1">Error al generar</p>
               <p className="text-red-400/70 text-xs">{genError}</p>
               <button
-                onClick={awaitingMcp ? handleGenerateStrategy : handleStartAnalysis}
+                onClick={handleStartAnalysis}
                 className="mt-3 text-xs text-red-400 underline"
               >
                 Reintentar
@@ -1753,11 +1973,13 @@ export default function EstrategiaPage() {
             </div>
           )}
 
-          {strategy && !generating && (
+          {strategy && !generating && showMode1Section && (
             <div className="space-y-4">
               {/* Summary card */}
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-                <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+
+                {/* Header */}
+                <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
                   <h3 className="text-white font-semibold">Qué está pasando esta semana</h3>
                   <div className="flex items-center gap-2 shrink-0">
                     {strategy.estado_funnel && (
@@ -1772,7 +1994,37 @@ export default function EstrategiaPage() {
                     )}
                   </div>
                 </div>
-                <p className="text-neutral-300 text-sm leading-relaxed">{strategy.resumen}</p>
+
+                {/* KPI chips — scan rápido */}
+                {strategy.resumen_kpis && strategy.resumen_kpis.length > 0 && (
+                  <div className="px-5 pb-3 flex flex-wrap gap-2">
+                    {strategy.resumen_kpis.map((kpi, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border ${KPI_CFG[kpi.tipo]}`}
+                      >
+                        <span className="text-[10px] font-medium opacity-60 leading-none">{kpi.etiqueta}</span>
+                        <span className="text-sm font-bold tabular-nums leading-none">{kpi.valor}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Separador */}
+                <div className="mx-5 border-t border-neutral-800/60" />
+
+                {/* Análisis completo — colapsable */}
+                <div className="px-5 py-3">
+                  <div className={`text-neutral-400 text-sm leading-relaxed overflow-hidden transition-all duration-300 ${resumenExpanded ? '' : 'line-clamp-2'}`}>
+                    {strategy.resumen}
+                  </div>
+                  <button
+                    onClick={() => setResumenExpanded(e => !e)}
+                    className="mt-2 text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors"
+                  >
+                    {resumenExpanded ? 'Ver menos ↑' : 'Ver análisis completo ↓'}
+                  </button>
+                </div>
 
               </div>
 
@@ -1782,11 +2034,8 @@ export default function EstrategiaPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-neutral-400 text-sm font-medium">Acciones propuestas</p>
                     <div className="flex-1 h-px bg-neutral-800" />
-                    <p className="text-xs text-neutral-600">
-                      Marcá ✓ las que querés ejecutar · expandí ✏ para editar copies
-                    </p>
                   </div>
-                  {strategy.acciones.map((action, i) => (
+                  {filterAcciones(strategy.acciones).map((action, i) => (
                     <StrategyCanvasCard
                       key={i}
                       action={action}
@@ -1794,6 +2043,8 @@ export default function EstrategiaPage() {
                       edits={actionEdits[i] ?? { included: true, nodeEdits: {} }}
                       onToggle={() => toggleAction(i)}
                       onNodeEdit={(nodeOrden, copies) => editNode(i, nodeOrden, copies)}
+                      isOwnCampaign={isOwnCampaign(action)}
+                      assignedTo={getCampaignOwner(action)}
                     />
                   ))}
                 </>
@@ -1802,51 +2053,16 @@ export default function EstrategiaPage() {
                   <p className="text-neutral-400 text-sm">✓ No hay acciones requeridas esta semana — el funnel está estable</p>
                 </div>
               )}
-
-
-              <button
-                onClick={handleStartAnalysis}
-                className="text-xs text-neutral-500 hover:text-neutral-300 underline transition-colors"
-              >
-                Regenerar análisis
-              </button>
             </div>
           )}
         </section>
 
-        {/* ── Execution Preview ─────────────────────────────────────────────── */}
-        {strategy && strategy.acciones.length > 0 && !executed && !generating && (
-          <section>
-            <ExecutionPreview
-              strategy={strategy}
-              actionEdits={actionEdits}
-              safety={safety}
-              executing={executing}
-              onExecute={handleExecute}
-            />
-          </section>
-        )}
-
         {/* ── Fase 2B: Revisión de todas las campañas ────────────────────────── */}
-        {strategy && !generating && (
+        {strategy && !generating && showMode2Section && (
           <section>
-            <div className="flex items-center gap-3 mb-1">
-              <div>
-                <h2 className="text-white font-semibold text-lg">Revisión del resto de campañas</h2>
-                <p className="text-neutral-500 text-xs mt-0.5">
-                  Las campañas que el modelo no priorizó esta semana — entrega, cadencia y copy de forma independiente
-                </p>
-              </div>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-white font-semibold text-lg">Revisión del resto de campañas</h2>
               <div className="flex-1 h-px bg-neutral-800" />
-            </div>
-
-            <div className="mb-4 mt-4 bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3">
-              <p className="text-neutral-500 text-xs leading-relaxed">
-                <span className="text-neutral-300 font-medium">Por qué existe esta sección:</span>{' '}
-                el análisis principal actúa donde el modelo detectó presión esta semana.
-                Acá revisás el resto — campañas que no tuvieron señal del modelo pero pueden tener
-                problemas de entrega, mensajes insuficientes o copy que se puede mejorar con el contexto actual.
-              </p>
             </div>
 
             {/* Campañas ya cubiertas por el análisis principal */}
@@ -1878,28 +2094,12 @@ export default function EstrategiaPage() {
                     <span className="text-lg">🔍</span>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-semibold mb-0.5">Pegá el detalle de las campañas restantes</p>
+                    <p className="text-white text-sm font-semibold mb-0.5">Revisar campañas restantes</p>
                     <p className="text-neutral-500 text-xs leading-relaxed">
-                      Copiá desde el panel de CIO (o Claude.ai) los nodos, subjects y estructura de cada campaña
-                      que no aparece en el análisis principal. Esto es provisional — cuando tengamos
-                      acceso completo a la API de CIO se cargará automáticamente.
+                      El sistema leerá automáticamente la estructura y contenido de las campañas
+                      que no fueron intervenidas en el análisis principal.
                     </p>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-neutral-500 uppercase tracking-wider font-medium mb-2">
-                    Estructura y contenido de las campañas
-                  </label>
-                  <textarea
-                    value={detallesCampanas}
-                    onChange={e => setDetallesCampanas(e.target.value)}
-                    rows={7}
-                    placeholder={`Ej:\nCampaña: "R23.01_Onboarding_Initial_Info_Completed"\nNodo 1 (Push, día 0): subject "Completá tu perfil" · body "Solo te falta un paso..."\nNodo 2 (Email, +24h): subject "Tu cuenta te espera" · body "Abrí la app y..."\n\nCampaña: "CO_Onboarding_Photo_Validation_Completed"\n...`}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3.5 py-3 text-sm text-neutral-200 placeholder:text-neutral-600 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/40 hover:border-neutral-600 transition-colors leading-relaxed font-mono"
-                  />
-                  <p className="text-neutral-700 text-xs mt-1.5">
-                    Cuanto más detalle des (subjects, bodies, delays entre nodos), más precisas serán las recomendaciones.
-                  </p>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 text-xs text-neutral-600">
@@ -1911,8 +2111,7 @@ export default function EstrategiaPage() {
                   </div>
                   <button
                     onClick={handleGenerateStructural}
-                    disabled={!detallesCampanas.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors"
                   >
                     Revisar campañas
                   </button>
@@ -1921,24 +2120,7 @@ export default function EstrategiaPage() {
             )}
 
             {/* Loading */}
-            {structuralGenerating && (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <span className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-white font-medium">Revisando campañas…</p>
-                </div>
-                <p className="text-neutral-500 text-sm">
-                  Analizando entrega, cadencia y copy de forma independiente al modelo · ~30–60s
-                </p>
-                <div className="flex items-center justify-center gap-1.5 mt-4">
-                  {['Métricas', 'Cadencia', 'Copy', 'Contexto', 'Recomendaciones'].map((label, i) => (
-                    <span key={label} className="text-xs text-neutral-600 animate-pulse" style={{ animationDelay: `${i * 0.3}s` }}>
-                      {label}{i < 4 ? ' →' : ''}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            {structuralGenerating && <StrategyLoader awaitingMcp={true} />}
 
             {/* Error */}
             {structuralError && !structuralGenerating && (
@@ -1954,14 +2136,11 @@ export default function EstrategiaPage() {
             {/* Resultados */}
             {structuralResult && !structuralGenerating && (
               <div className="space-y-4">
-                <div className="bg-neutral-900 border border-blue-500/15 rounded-xl p-5">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div>
-                      <h3 className="text-white font-semibold">Qué encontramos en el resto de campañas</h3>
-                      {structuralResult.semana_label && (
-                        <p className="text-neutral-600 text-xs mt-0.5">Semana {structuralResult.semana_label}</p>
-                      )}
-                    </div>
+                <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+
+                  {/* Header */}
+                  <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-white font-semibold">Qué encontramos en el resto de campañas</h3>
                     <div className="flex items-center gap-2 shrink-0">
                       {structuralResult.estado_funnel && (
                         <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${ESTADO_CFG[structuralResult.estado_funnel]?.cls}`}>
@@ -1969,13 +2148,44 @@ export default function EstrategiaPage() {
                         </span>
                       )}
                       {structuralResult.acciones.length > 0 && (
-                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700">
                           {structuralResult.acciones.length} mejora{structuralResult.acciones.length !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
                   </div>
-                  <p className="text-neutral-300 text-sm leading-relaxed">{structuralResult.resumen}</p>
+
+                  {/* KPI chips */}
+                  {structuralResult.resumen_kpis && structuralResult.resumen_kpis.length > 0 && (
+                    <div className="px-5 pb-3 flex flex-wrap gap-2">
+                      {structuralResult.resumen_kpis.map((kpi, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border ${KPI_CFG[kpi.tipo]}`}
+                        >
+                          <span className="text-[10px] font-medium opacity-60 leading-none">{kpi.etiqueta}</span>
+                          <span className="text-sm font-bold tabular-nums leading-none">{kpi.valor}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Separador */}
+                  <div className="mx-5 border-t border-neutral-800/60" />
+
+                  {/* Análisis colapsable */}
+                  <div className="px-5 py-3">
+                    <div className={`text-neutral-400 text-sm leading-relaxed overflow-hidden transition-all duration-300 ${structuralResumenExpanded ? '' : 'line-clamp-2'}`}>
+                      {structuralResult.resumen}
+                    </div>
+                    <button
+                      onClick={() => setStructuralResumenExpanded(e => !e)}
+                      className="mt-2 text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors"
+                    >
+                      {structuralResumenExpanded ? 'Ver menos ↑' : 'Ver análisis completo ↓'}
+                    </button>
+                  </div>
+
                 </div>
 
                 {structuralResult.acciones.length > 0 ? (
@@ -1983,11 +2193,8 @@ export default function EstrategiaPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-neutral-400 text-sm font-medium">Campañas con oportunidad de mejora</p>
                       <div className="flex-1 h-px bg-neutral-800" />
-                      <p className="text-xs text-neutral-600">
-                        Basado en salud estructural, no en señal del modelo
-                      </p>
                     </div>
-                    {structuralResult.acciones.map((action, i) => (
+                    {filterAcciones(structuralResult.acciones).map((action, i) => (
                       <StrategyCanvasCard
                         key={i}
                         action={action}
@@ -2004,6 +2211,8 @@ export default function EstrategiaPage() {
                             nodeEdits: { ...(prev[i]?.nodeEdits ?? {}), [nodeOrden]: copies },
                           },
                         }))}
+                        isOwnCampaign={isOwnCampaign(action)}
+                        assignedTo={getCampaignOwner(action)}
                       />
                     ))}
                   </>
@@ -2015,48 +2224,8 @@ export default function EstrategiaPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => { setStructuralResult(null); setDetallesCampanas('') }}
-                  className="text-xs text-neutral-500 hover:text-neutral-300 underline transition-colors"
-                >
-                  Actualizar revisión
-                </button>
               </div>
             )}
-          </section>
-        )}
-
-        {/* ── Execution result ──────────────────────────────────────────────── */}
-        {executed && (
-          <section>
-            <div className={`border rounded-xl p-5 ${executed.total_errores === 0 ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
-              <h2 className={`font-semibold mb-3 ${executed.total_errores === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {executed.total_errores === 0
-                  ? `✓ ${executed.total_ejecutadas} acción(es) ejecutadas correctamente`
-                  : `⚠ ${executed.total_ejecutadas} ejecutadas · ${executed.total_errores} error(es)`}
-              </h2>
-              {executed.executed.length > 0 && (
-                <div className="space-y-1.5 mb-3">
-                  {executed.executed.map((e, i) => (
-                    <div key={i} className="text-sm text-neutral-300 flex items-center gap-2">
-                      <span className="text-emerald-500 text-xs">✓</span>
-                      <span className="font-medium capitalize">{e.tipo}</span>
-                      <span className="text-neutral-500">·</span>
-                      <span>{e.step_code}</span>
-                      {e.nombre && <span className="text-neutral-400 text-xs">"{e.nombre}"</span>}
-                      {e.campaign_id && <span className="text-neutral-600 text-xs font-mono">#{e.campaign_id}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {executed.errors.length > 0 && (
-                <div className="space-y-1">
-                  {executed.errors.map((e, i) => (
-                    <p key={i} className="text-xs text-red-400">✗ {e.step_code} · {e.error}</p>
-                  ))}
-                </div>
-              )}
-            </div>
           </section>
         )}
 

@@ -35,12 +35,11 @@ export const api = {
   getFunnelHealth: () => apiFetch<FunnelStep[]>('/api/strategy/funnel-health'),
   syncCampaigns: () => apiFetch<SyncResult>('/api/strategy/sync', { method: 'POST' }),
   getSafetyStatus: () => apiFetch<SafetyStatus>('/api/strategy/safety-status'),
-  generateStrategy: (contextoAdicional?: string, estructuraCampana?: string) =>
+  generateStrategy: (contextoAdicional?: string) =>
     apiFetch<StrategyResult>('/api/strategy/generate', {
       method: 'POST',
       body: JSON.stringify({
         contexto_adicional: contextoAdicional ?? null,
-        estructura_campana: estructuraCampana ?? null,
       }),
     }),
   executeStrategy: (strategy: StrategyResult) =>
@@ -52,14 +51,19 @@ export const api = {
   getLatestStrategy: () => apiFetch<StrategyResult>('/api/strategy/latest'),
   getStrategyHistory: () => apiFetch<StrategyResult[]>('/api/strategy/history'),
   getLatestStructural: () => apiFetch<StrategyResult>('/api/strategy/latest-structural'),
-  generateStructural: (detallesCampanas: string, phase2Strategy: StrategyResult, contextoAdicional?: string) =>
+  getAssignments: () => apiFetch<{ user_name: string; campaign_name: string }[]>('/api/strategy/assignments'),
+  generateStructural: (phase2Strategy: StrategyResult, contextoAdicional?: string) =>
     apiFetch<StrategyResult>('/api/strategy/generate-structural', {
       method: 'POST',
       body: JSON.stringify({
-        detalle_campanas: detallesCampanas,
         phase2_strategy: phase2Strategy,
         contexto_adicional: contextoAdicional ?? null,
       }),
+    }),
+  updateNode: (payload: { action_id: number; template_id: number; subject: string; cuerpo: string; preheader?: string }) =>
+    apiFetch<{ ok: boolean; action_id: number; template_id: number }>('/api/strategy/update-node', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   // ── Configuración ────────────────────────────────────────────────────────
@@ -86,9 +90,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(entry),
     }),
-
-  // ── Monitor Fase 3 ───────────────────────────────────────────────────────
-  runWeeklyCheck: () => apiFetch<MonitorReport>('/api/monitor/check'),
 
   // ── Medición Fase 4 ─────────────────────────────────────────────────────
   bqStatus: () => apiFetch<{ configured: boolean; message: string }>('/api/measure/status'),
@@ -229,12 +230,15 @@ export interface FunnelStep {
 
 export interface StrategyNode {
   orden: number
-  nombre?: string  // nombre EXACTO del nodo en CIO (ej: "Push 3 (Beneficios)", "Email 1 – Educación & transparencia")
+  id_nodo_cio?: number | null  // ID exacto del nodo en CIO — campo de match primario para el canvas
+  template_id?: number | null  // ID del template CIO donde vive el copy real del nodo
+  nombre?: string      // nombre EXACTO del nodo en CIO — fallback de match si id_nodo_cio no está
   tipo: 'push' | 'email'
   delay_desde_anterior_horas: number
-  subject:   string  // Liquid expression con ramas por Perfil_de_riesgo
-  preheader?: string // Liquid expression (solo email)
-  cuerpo:    string  // Liquid expression con ramas por Perfil_de_riesgo
+  subject:    string   // Liquid expression con ramas por Perfil_de_riesgo
+  preheader?: string   // Liquid expression (solo email)
+  cuerpo:     string   // Liquid expression con ramas por Perfil_de_riesgo
+  modificado?: boolean // true = tiene cambios propuestos; false = nodo sin cambios (read-only en canvas)
 }
 
 export interface CambiosEstructura {
@@ -259,12 +263,20 @@ export interface StrategyAction {
     trigger_event: string
     conversion_event: string
     cambios_estructura?: CambiosEstructura
-    nodos: StrategyNode[]
+    nodos: StrategyNode[] | null  // null para alerta_gap
   }
+  nodos_completos?: StrategyNode[] // todos los nodos del journey (modificado=true/false) para el canvas
+}
+
+export interface ResumenKpi {
+  etiqueta: string
+  valor: string
+  tipo: 'positivo' | 'alerta' | 'neutro' | 'oportunidad'
 }
 
 export interface StrategyResult {
   resumen: string
+  resumen_kpis?: ResumenKpi[]
   estado_funnel: 'estable' | 'anomalia_leve' | 'anomalia_critica'
   semana_label?: string
   acciones: StrategyAction[]
@@ -358,49 +370,6 @@ export interface SystemContext {
   knowledge_base: KnowledgeBaseEntry[]
 }
 
-// ── Fase 3: Monitor ───────────────────────────────────────────────────────────
-
-export type MonitorHealth = 'ok' | 'alerta' | 'critico' | 'sin_datos'
-
-export interface CampaignTrend {
-  last_week: number
-  prior_avg: number
-  change_pct: number
-}
-
-export interface CampaignCheckResult {
-  cio_campaign_id: string
-  name: string
-  status_campaign: string | null
-  funnel_step_mapped: string | null
-  health: MonitorHealth
-  label: string
-  issues: string[]
-  metrics: {
-    delivery_rate: number
-    open_rate: number
-    conversion_rate: number
-    delivered: number
-    total_sent: number
-    converted: number
-  }
-  trends: {
-    delivered?: CampaignTrend
-    converted?: CampaignTrend
-    human_opened?: CampaignTrend
-  }
-}
-
-export interface MonitorReport {
-  checked_at: string
-  overall_health: MonitorHealth
-  total_campaigns: number
-  ok: number
-  alertas: number
-  criticas: number
-  sin_datos: number
-  campaigns: CampaignCheckResult[]
-}
 
 export interface TrackedCampaign {
   cio_campaign_id: string
