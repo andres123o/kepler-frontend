@@ -12,7 +12,7 @@ const USERS: Record<string, { name: string; role: 'admin' | 'agent'; campaign?: 
   admin:   { name: 'Admin',   role: 'admin' },
   sebas:   { name: 'Sebas',   role: 'agent' },
   felipe:  { name: 'Felipe',  role: 'agent' },
-  juanita: { name: 'Juanita', role: 'admin', campaign: 'Primer depósito' },
+  juanita: { name: 'Juanita', role: 'agent' },
   andrea:  { name: 'Andrea',  role: 'agent' },
   manu:    { name: 'Manu',    role: 'agent' },
   camu:    { name: 'Camu',    role: 'agent' },

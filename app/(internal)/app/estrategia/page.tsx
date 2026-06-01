@@ -882,10 +882,17 @@ function CampaignFlowCanvas({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // Para el panel de edición: buscar en nodosPropuesta (tiene el orden correcto para edits)
-  const selectedEditNodo    = nodosPropuesta.find(n => n.orden === selectedOrden) ?? null
   // Para el delay label y para el botón: buscar en todos los nodos (tiene id_nodo_cio, template_id)
   const selectedDisplayNodo = nodos.find(n => n.orden === selectedOrden) ?? null
+  // Para el panel de edición: match por id_nodo_cio o nombre — el "orden" del propuesta no coincide
+  // necesariamente con el orden de traversal del journey (msg_count en _build_nodos_completos)
+  const selectedEditNodo = selectedDisplayNodo
+    ? (nodosPropuesta.find(n =>
+        selectedDisplayNodo.id_nodo_cio != null && n.id_nodo_cio === selectedDisplayNodo.id_nodo_cio
+      ) ?? nodosPropuesta.find(n =>
+        !!n.nombre && n.nombre === selectedDisplayNodo.nombre
+      ) ?? null)
+    : null
 
   // Copies resueltos para el botón de actualizar (edits del usuario si editó, sino el propuesto)
   const panelCopies: NodeCopies | null = selectedEditNodo
@@ -969,7 +976,10 @@ function CampaignFlowCanvas({
           <FlowTriggerNode label={trigger} />
           {nodos.map((nodo, i) => {
             // Resuelve el copy a enviar: edits del usuario si editó, sino el propuesto por Claude
-            const editNodo = nodosPropuesta.find(n => n.orden === nodo.orden)
+            // Match por id_nodo_cio o nombre — el orden del propuesta puede diferir del journey
+            const editNodo = nodosPropuesta.find(n =>
+              nodo.id_nodo_cio != null && n.id_nodo_cio === nodo.id_nodo_cio
+            ) ?? nodosPropuesta.find(n => !!n.nombre && n.nombre === nodo.nombre)
             const resolvedCopies: NodeCopies = editNodo
               ? (edits.nodeEdits[editNodo.orden] ?? {
                   subject:   toLiquid(editNodo.subject   as Parameters<typeof toLiquid>[0]),
@@ -1191,11 +1201,18 @@ function StrategyCanvasCard({
           </div>
         </div>
 
-        {action.shap_contribucion != null && (
-          <span className={`text-sm font-semibold tabular-nums shrink-0 ${action.shap_contribucion >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {action.shap_contribucion >= 0 ? '+' : ''}{action.shap_contribucion.toFixed(0)} dep.
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {assignedTo && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
+              {assignedTo}
+            </span>
+          )}
+          {action.shap_contribucion != null && (
+            <span className={`text-sm font-semibold tabular-nums ${action.shap_contribucion >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {action.shap_contribucion >= 0 ? '+' : ''}{action.shap_contribucion.toFixed(0)} dep.
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Body */}
@@ -1205,11 +1222,6 @@ function StrategyCanvasCard({
           {isOwnCampaign && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 shrink-0">
               Tu campaña
-            </span>
-          )}
-          {assignedTo && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 shrink-0">
-              👤 {assignedTo}
             </span>
           )}
         </div>
