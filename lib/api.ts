@@ -60,13 +60,15 @@ export const api = {
         contexto_adicional: contextoAdicional ?? null,
       }),
     }),
-  updateNode: (payload: { action_id: number; template_id: number; subject: string; cuerpo: string; preheader?: string; user_name?: string; campaign_name?: string }) =>
+  updateNode: (payload: { action_id: number; template_id: number; subject: string; cuerpo: string; preheader?: string; user_name?: string; campaign_name?: string; semana_label?: string }) =>
     apiFetch<{ ok: boolean; action_id: number; template_id: number }>('/api/strategy/update-node', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  getSentNodes: (semanaLabel: string) =>
+    apiFetch<{ semana_label: string; sent: number[] }>(`/api/strategy/sent-nodes?semana_label=${encodeURIComponent(semanaLabel)}`),
   getAdminStatus: () =>
-    apiFetch<{ user_name: string; campaign_name: string; nodes_updated: number; last_update: string | null; status: 'done' | 'pending' }[]>('/api/strategy/admin-status'),
+    apiFetch<{ user_name: string; campaign_name: string; nodes_updated: number; nodes_total: number | null; nodes_pending: number | null; semana_label: string | null; last_update: string | null; status: 'done' | 'partial' | 'pending' }[]>('/api/strategy/admin-status'),
 
   // ── Configuración ────────────────────────────────────────────────────────
   getTrackedCampaigns: () =>

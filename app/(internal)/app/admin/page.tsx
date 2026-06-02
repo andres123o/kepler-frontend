@@ -8,8 +8,11 @@ interface AgentStatus {
   user_name: string
   campaign_name: string
   nodes_updated: number
+  nodes_total: number | null
+  nodes_pending: number | null
+  semana_label: string | null
   last_update: string | null
-  status: 'done' | 'pending'
+  status: 'done' | 'partial' | 'pending'
 }
 
 function timeAgo(iso: string | null): string {
@@ -22,6 +25,24 @@ function timeAgo(iso: string | null): string {
   if (mins < 60)  return `hace ${mins}m`
   if (hours < 24) return `hace ${hours}h`
   return `hace ${days}d`
+}
+
+function ProgressBar({ sent, total }: { sent: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0
+  const color = pct >= 100 ? 'bg-emerald-500' : pct > 0 ? 'bg-amber-500' : 'bg-neutral-700'
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-xs tabular-nums text-neutral-400 shrink-0 w-10 text-right">
+        {sent}/{total}
+      </span>
+    </div>
+  )
 }
 
 export default function AdminPage() {
@@ -61,8 +82,16 @@ export default function AdminPage() {
   if (isAdmin === null) return null
 
   const done    = data.filter(d => d.status === 'done').length
+  const partial = data.filter(d => d.status === 'partial').length
   const pending = data.filter(d => d.status === 'pending').length
   const total   = data.length
+
+  // Nodos totales pendientes en todo el equipo
+  const teamPending = data.reduce((acc, d) => acc + (d.nodes_pending ?? 0), 0)
+  const teamTotal   = data.reduce((acc, d) => acc + (d.nodes_total ?? 0), 0)
+  const teamSent    = data.reduce((acc, d) => acc + d.nodes_updated, 0)
+
+  const semana = data[0]?.semana_label ?? null
 
   return (
     <div className="py-10 px-8 space-y-8">
@@ -71,7 +100,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-white text-2xl font-bold">Panel de Equipo</h1>
           <p className="text-neutral-500 text-sm mt-1">
-            Estado de actualizaciones por agente — semana actual
+            {semana ? `Semana ${semana}` : 'Estado de actualizaciones por agente — semana actual'}
           </p>
         </div>
         <button
@@ -83,21 +112,41 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Resumen */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Resumen equipo */}
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-center">
           <p className="text-3xl font-bold text-white tabular-nums">{total}</p>
-          <p className="text-neutral-500 text-xs mt-1">Agentes totales</p>
+          <p className="text-neutral-500 text-xs mt-1">Agentes</p>
         </div>
         <div className="bg-neutral-900 border border-emerald-500/20 rounded-xl p-4 text-center">
           <p className="text-3xl font-bold text-emerald-400 tabular-nums">{done}</p>
           <p className="text-neutral-500 text-xs mt-1">Completaron</p>
         </div>
         <div className="bg-neutral-900 border border-amber-500/20 rounded-xl p-4 text-center">
-          <p className="text-3xl font-bold text-amber-400 tabular-nums">{pending}</p>
-          <p className="text-neutral-500 text-xs mt-1">Pendientes</p>
+          <p className="text-3xl font-bold text-amber-400 tabular-nums">{partial}</p>
+          <p className="text-neutral-500 text-xs mt-1">En progreso</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-neutral-400 tabular-nums">{pending}</p>
+          <p className="text-neutral-500 text-xs mt-1">Sin iniciar</p>
         </div>
       </div>
+
+      {/* Progreso global del equipo */}
+      {teamTotal > 0 && (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-neutral-400 text-sm font-medium">Progreso del equipo</span>
+            <span className="text-neutral-300 text-sm tabular-nums font-semibold">
+              {teamSent} <span className="text-neutral-600 font-normal">/ {teamTotal} nodos</span>
+              {teamPending > 0 && (
+                <span className="text-amber-400 ml-2">· {teamPending} pendientes</span>
+              )}
+            </span>
+          </div>
+          <ProgressBar sent={teamSent} total={teamTotal} />
+        </div>
+      )}
 
       {/* Tabla */}
       {error ? (
@@ -117,7 +166,8 @@ export default function AdminPage() {
               <tr className="border-b border-neutral-800">
                 <th className="text-left px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Agente</th>
                 <th className="text-left px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Campaña</th>
-                <th className="text-center px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Nodos</th>
+                <th className="text-left px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider w-48">Progreso</th>
+                <th className="text-center px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Pendientes</th>
                 <th className="text-left px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Última actividad</th>
                 <th className="text-center px-5 py-3 text-neutral-500 font-medium text-xs uppercase tracking-wider">Estado</th>
               </tr>
@@ -125,27 +175,59 @@ export default function AdminPage() {
             <tbody className="divide-y divide-neutral-800">
               {data.map(agent => (
                 <tr key={agent.user_name} className="hover:bg-neutral-800/40 transition-colors">
+
+                  {/* Agente */}
                   <td className="px-5 py-4">
                     <span className="text-white font-medium capitalize">{agent.user_name}</span>
                   </td>
+
+                  {/* Campaña */}
                   <td className="px-5 py-4">
-                    <span className="text-neutral-300">{agent.campaign_name}</span>
+                    <span className="text-neutral-300 text-xs">{agent.campaign_name}</span>
                   </td>
-                  <td className="px-5 py-4 text-center">
-                    {agent.nodes_updated > 0 ? (
-                      <span className="text-emerald-400 font-semibold tabular-nums">{agent.nodes_updated}</span>
+
+                  {/* Progreso con barra */}
+                  <td className="px-5 py-4 w-48">
+                    {agent.nodes_total !== null ? (
+                      <ProgressBar sent={agent.nodes_updated} total={agent.nodes_total} />
+                    ) : agent.nodes_updated > 0 ? (
+                      <span className="text-emerald-400 text-xs tabular-nums font-semibold">
+                        {agent.nodes_updated} enviados
+                      </span>
                     ) : (
-                      <span className="text-neutral-600">—</span>
+                      <span className="text-neutral-600 text-xs">Sin estrategia cargada</span>
                     )}
                   </td>
+
+                  {/* Pendientes */}
+                  <td className="px-5 py-4 text-center">
+                    {agent.nodes_pending !== null ? (
+                      agent.nodes_pending === 0 ? (
+                        <span className="text-emerald-400 text-xs font-semibold">0</span>
+                      ) : (
+                        <span className="text-amber-400 text-sm font-bold tabular-nums">{agent.nodes_pending}</span>
+                      )
+                    ) : (
+                      <span className="text-neutral-600 text-xs">—</span>
+                    )}
+                  </td>
+
+                  {/* Última actividad */}
                   <td className="px-5 py-4">
                     <span className="text-neutral-500 text-xs">{timeAgo(agent.last_update)}</span>
                   </td>
+
+                  {/* Estado badge */}
                   <td className="px-5 py-4 text-center">
                     {agent.status === 'done' ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         Listo
+                      </span>
+                    ) : agent.status === 'partial' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        En progreso
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-800 text-neutral-500 border border-neutral-700">

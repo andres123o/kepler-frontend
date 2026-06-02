@@ -494,12 +494,10 @@ function SegmentedLiquidField({
   const hasLiquid = value.includes('{%') || value.includes('{{')
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  // Auto-strip obligatorio: si detecta {%- o -%} los elimina inmediatamente
-  React.useEffect(() => {
-    if (value.includes('{%-') || value.includes('-%}')) {
-      onChange(value.replace(/\{%-/g, '{%').replace(/-%\}/g, '%}'))
-    }
-  }, [value])
+  // Strip aplicado de forma síncrona en cada cambio — evita el closure stale del useEffect async
+  function handleChange(v: string) {
+    onChange(v.replace(/\{%-/g, '{%').replace(/-%\}/g, '%}'))
+  }
 
   function handleDivClick() {
     setEditing(true)
@@ -524,7 +522,7 @@ function SegmentedLiquidField({
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => handleChange(e.target.value)}
           onBlur={() => hasLiquid && setEditing(false)}
           rows={rows}
           spellCheck={false}
@@ -574,6 +572,11 @@ function NodeLiquidEditor({
   copies: NodeCopies
   onChange: (c: NodeCopies) => void
 }) {
+  // Ref siempre apuntando al copies más reciente — previene que closures de renders anteriores
+  // expandan un copies stale y sobreescriban edits de otros campos
+  const copiesRef = React.useRef(copies)
+  copiesRef.current = copies
+
   const isPush = nodo.tipo === 'push'
   return (
     <div className="space-y-3">
@@ -582,7 +585,7 @@ function NodeLiquidEditor({
         hint={isPush ? '≤60 chars por rama' : '≤50 chars por rama'}
         value={copies.subject}
         rows={4}
-        onChange={v => onChange({ ...copies, subject: v })}
+        onChange={v => onChange({ ...copiesRef.current, subject: v })}
       />
       {!isPush && (
         <SegmentedLiquidField
@@ -590,7 +593,7 @@ function NodeLiquidEditor({
           hint="≤85 chars por rama"
           value={copies.preheader ?? ''}
           rows={4}
-          onChange={v => onChange({ ...copies, preheader: v })}
+          onChange={v => onChange({ ...copiesRef.current, preheader: v })}
         />
       )}
       <SegmentedLiquidField
@@ -598,7 +601,7 @@ function NodeLiquidEditor({
         hint={isPush ? '≤180 chars por rama' : '≤500 chars por rama'}
         value={copies.cuerpo}
         rows={isPush ? 6 : 8}
-        onChange={v => onChange({ ...copies, cuerpo: v })}
+        onChange={v => onChange({ ...copiesRef.current, cuerpo: v })}
       />
     </div>
   )
@@ -849,6 +852,7 @@ function CampaignFlowCanvas({
   selectedOrden,
   onSelect,
   nodeUpdateStatus = {},
+  nodeUpdateError = {},
   onUpdateNode,
 }: {
   nodos: StrategyNode[]
@@ -860,6 +864,7 @@ function CampaignFlowCanvas({
   selectedOrden: number | null
   onSelect: (orden: number | null) => void
   nodeUpdateStatus?: Record<number, NodeUpdateStatus>
+  nodeUpdateError?: Record<number, string>
   onUpdateNode?: (nodo: StrategyNode, copies: NodeCopies) => void
 }) {
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -913,6 +918,10 @@ function CampaignFlowCanvas({
   const panelUpdateStatus: NodeUpdateStatus = selectedDisplayNodo
     ? (nodeUpdateStatus[selectedDisplayNodo.orden] ?? 'idle')
     : 'idle'
+
+  const panelUpdateError: string | null = selectedDisplayNodo
+    ? (nodeUpdateError[selectedDisplayNodo.orden] ?? null)
+    : null
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return
@@ -1076,7 +1085,7 @@ function CampaignFlowCanvas({
 
             {/* Botón actualizar — fijo al fondo del panel */}
             {panelCanUpdate && (
-              <div className="shrink-0 px-4 py-3 border-t border-neutral-800" data-no-drag>
+              <div className="shrink-0 px-4 py-3 border-t border-neutral-800 space-y-2" data-no-drag>
                 {panelUpdateStatus === 'success' ? (
                   <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-semibold">
                     ✓ Actualizado en CIO
@@ -1107,6 +1116,10 @@ function CampaignFlowCanvas({
                         : 'Actualizar en CIO'}
                   </button>
                 )}
+                {/* Mensaje de error debajo del botón */}
+                {panelUpdateStatus === 'error' && panelUpdateError && (
+                  <p className="text-red-400/80 text-[11px] leading-relaxed">{panelUpdateError}</p>
+                )}
               </div>
             )}
           </motion.div>
@@ -1125,6 +1138,7 @@ function StrategyCanvasCard({
   isOwnCampaign = false,
   assignedTo = null,
   userName = null,
+  semanaLabel = '',
 }: {
   action: StrategyAction
   actionIndex: number
@@ -1134,10 +1148,41 @@ function StrategyCanvasCard({
   isOwnCampaign?: boolean
   assignedTo?: string | null
   userName?: string | null
+  semanaLabel?: string
 }) {
   const [selectedNodeOrden, setSelectedNodeOrden] = useState<number | null>(null)
   const [razonExpanded, setRazonExpanded] = useState(false)
   const [nodeUpdateStatus, setNodeUpdateStatus] = useState<Record<number, NodeUpdateStatus>>({})
+  const [nodeUpdateError, setNodeUpdateError]   = useState<Record<number, string>>({})
+
+  // Al montar: localStorage (respuesta inmediata) + backend (cubre otros browsers y cambios previos)
+  useEffect(() => {
+    if (!semanaLabel) return
+    const nodos = action.nodos_completos ?? action.propuesta.nodos ?? []
+
+    // 1. localStorage: respuesta instantánea en el mismo browser
+    const fromCache: Record<number, NodeUpdateStatus> = {}
+    nodos.forEach(n => {
+      if (n.id_nodo_cio && localStorage.getItem(`kepler:sent:${semanaLabel}:${n.id_nodo_cio}`)) {
+        fromCache[n.orden] = 'success'
+      }
+    })
+    if (Object.keys(fromCache).length > 0) setNodeUpdateStatus(fromCache)
+
+    // 2. Backend: autoridad final — cubre otros browsers y envíos de otros agentes
+    api.getSentNodes(semanaLabel).then(({ sent }) => {
+      const sentSet = new Set(sent)
+      const fromServer: Record<number, NodeUpdateStatus> = {}
+      nodos.forEach(n => {
+        if (n.id_nodo_cio && sentSet.has(n.id_nodo_cio)) {
+          fromServer[n.orden] = 'success'
+          localStorage.setItem(`kepler:sent:${semanaLabel}:${n.id_nodo_cio}`, '1')
+        }
+      })
+      if (Object.keys(fromServer).length > 0)
+        setNodeUpdateStatus(prev => ({ ...prev, ...fromServer }))
+    }).catch(() => {})
+  }, [semanaLabel])
 
   async function handleUpdateNode(nodo: StrategyNode, copies: NodeCopies) {
     if (!nodo.id_nodo_cio || !nodo.template_id) return
@@ -1152,10 +1197,20 @@ function StrategyCanvasCard({
         preheader:     copies.preheader,
         user_name:     userName ?? undefined,
         campaign_name: action.campaña_existente_nombre ?? action.step_name ?? undefined,
+        semana_label:  semanaLabel || undefined,
       })
+      localStorage.setItem(`kepler:sent:${semanaLabel}:${nodo.id_nodo_cio}`, '1')
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'success' }))
     } catch (err) {
-      console.error('[Kepler] Error actualizando nodo', nodo.id_nodo_cio, err)
+      let msg = 'Error al actualizar en CIO — reintentá'
+      if (err instanceof Error) {
+        try {
+          const body = err.message.replace(/^\d+:\s*/, '')
+          const parsed = JSON.parse(body)
+          if (parsed.detail) msg = parsed.detail
+        } catch { /* usar mensaje genérico */ }
+      }
+      setNodeUpdateError(prev => ({ ...prev, [orden]: msg }))
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'error' }))
     }
   }
@@ -1293,6 +1348,7 @@ function StrategyCanvasCard({
             selectedOrden={selectedNodeOrden}
             onSelect={setSelectedNodeOrden}
             nodeUpdateStatus={nodeUpdateStatus}
+            nodeUpdateError={nodeUpdateError}
             onUpdateNode={handleUpdateNode}
           />
         ) : null}
@@ -2051,19 +2107,23 @@ export default function EstrategiaPage() {
                     <p className="text-neutral-400 text-sm font-medium">Acciones propuestas</p>
                     <div className="flex-1 h-px bg-neutral-800" />
                   </div>
-                  {filterAcciones(strategy.acciones).map((action, i) => (
-                    <StrategyCanvasCard
-                      key={i}
-                      action={action}
-                      actionIndex={i}
-                      edits={actionEdits[i] ?? { included: true, nodeEdits: {} }}
-                      onToggle={() => toggleAction(i)}
-                      onNodeEdit={(nodeOrden, copies) => editNode(i, nodeOrden, copies)}
-                      isOwnCampaign={isOwnCampaign(action)}
-                      assignedTo={getCampaignOwner(action)}
-                      userName={currentUser?.name ?? null}
-                    />
-                  ))}
+                  {filterAcciones(strategy.acciones).map((action) => {
+                    const origIdx = strategy.acciones.indexOf(action)
+                    return (
+                      <StrategyCanvasCard
+                        key={origIdx}
+                        action={action}
+                        actionIndex={origIdx}
+                        edits={actionEdits[origIdx] ?? { included: true, nodeEdits: {} }}
+                        onToggle={() => toggleAction(origIdx)}
+                        onNodeEdit={(nodeOrden, copies) => editNode(origIdx, nodeOrden, copies)}
+                        isOwnCampaign={isOwnCampaign(action)}
+                        assignedTo={getCampaignOwner(action)}
+                        userName={currentUser?.name ?? null}
+                        semanaLabel={strategy.semana_label ?? ''}
+                      />
+                    )
+                  })}
                 </>
               ) : (
                 <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-center">
@@ -2211,28 +2271,32 @@ export default function EstrategiaPage() {
                       <p className="text-neutral-400 text-sm font-medium">Campañas con oportunidad de mejora</p>
                       <div className="flex-1 h-px bg-neutral-800" />
                     </div>
-                    {filterAcciones(structuralResult.acciones).map((action, i) => (
-                      <StrategyCanvasCard
-                        key={i}
-                        action={action}
-                        actionIndex={i}
-                        edits={structuralEdits[i] ?? { included: true, nodeEdits: {} }}
-                        onToggle={() => setStructuralEdits(prev => ({
-                          ...prev,
-                          [i]: { ...prev[i], included: !(prev[i]?.included ?? true) },
-                        }))}
-                        onNodeEdit={(nodeOrden, copies) => setStructuralEdits(prev => ({
-                          ...prev,
-                          [i]: {
-                            ...prev[i],
-                            nodeEdits: { ...(prev[i]?.nodeEdits ?? {}), [nodeOrden]: copies },
-                          },
-                        }))}
-                        isOwnCampaign={isOwnCampaign(action)}
-                        assignedTo={getCampaignOwner(action)}
-                        userName={currentUser?.name ?? null}
-                      />
-                    ))}
+                    {filterAcciones(structuralResult.acciones).map((action) => {
+                      const origIdx = structuralResult.acciones.indexOf(action)
+                      return (
+                        <StrategyCanvasCard
+                          key={origIdx}
+                          action={action}
+                          actionIndex={origIdx}
+                          edits={structuralEdits[origIdx] ?? { included: true, nodeEdits: {} }}
+                          onToggle={() => setStructuralEdits(prev => ({
+                            ...prev,
+                            [origIdx]: { ...prev[origIdx], included: !(prev[origIdx]?.included ?? true) },
+                          }))}
+                          onNodeEdit={(nodeOrden, copies) => setStructuralEdits(prev => ({
+                            ...prev,
+                            [origIdx]: {
+                              ...prev[origIdx],
+                              nodeEdits: { ...(prev[origIdx]?.nodeEdits ?? {}), [nodeOrden]: copies },
+                            },
+                          }))}
+                          isOwnCampaign={isOwnCampaign(action)}
+                          assignedTo={getCampaignOwner(action)}
+                          userName={currentUser?.name ?? null}
+                          semanaLabel={structuralResult.semana_label ?? ''}
+                        />
+                      )
+                    })}
                   </>
                 ) : (
                   <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-center">
