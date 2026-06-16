@@ -691,9 +691,13 @@ function FlowMessageNode({
 
   const badge = updateStatus === 'success'
     ? <span className="ml-auto text-[9px] text-emerald-400 font-semibold tracking-wide">✓ Listo</span>
-    : (modificado && !sinCambios)
-      ? <span className="ml-auto text-[9px] text-amber-400 font-semibold tracking-wide">● Cambios</span>
-      : null
+    : updateStatus === 'error'
+      ? <span className="ml-auto text-[9px] text-red-400 font-semibold tracking-wide">✗ Revisar</span>
+      : updateStatus === 'loading'
+        ? <span className="ml-auto w-2.5 h-2.5 rounded-full border border-amber-400/30 border-t-amber-400 animate-spin shrink-0" />
+        : sinCambios
+          ? <span className="ml-auto text-[9px] text-neutral-600 font-medium tracking-wide">Sin cambio</span>
+          : <span className="ml-auto text-[9px] text-amber-400 font-semibold tracking-wide">● Cambios</span>
 
   return (
     <motion.div
@@ -1101,9 +1105,7 @@ function CampaignFlowCanvas({
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold transition-colors border ${
                       panelUpdateStatus === 'loading'
                         ? 'bg-amber-500/10 text-amber-400/40 border-amber-500/10 cursor-not-allowed'
-                        : panelUpdateStatus === 'error'
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
                     }`}
                   >
                     {panelUpdateStatus === 'loading' && (
@@ -1111,9 +1113,7 @@ function CampaignFlowCanvas({
                     )}
                     {panelUpdateStatus === 'loading'
                       ? 'Actualizando...'
-                      : panelUpdateStatus === 'error'
-                        ? '✗ Error — reintentar'
-                        : 'Actualizar en CIO'}
+                      : 'Actualizar en CIO'}
                   </button>
                 )}
                 {/* Mensaje de error debajo del botón */}
@@ -1139,6 +1139,9 @@ function StrategyCanvasCard({
   assignedTo = null,
   userName = null,
   semanaLabel = '',
+  strategyId,
+  strategyCreatedAt,
+  isPremium = false,
 }: {
   action: StrategyAction
   actionIndex: number
@@ -1149,40 +1152,49 @@ function StrategyCanvasCard({
   assignedTo?: string | null
   userName?: string | null
   semanaLabel?: string
+  strategyId?: string
+  strategyCreatedAt?: string
+  isPremium?: boolean
 }) {
   const [selectedNodeOrden, setSelectedNodeOrden] = useState<number | null>(null)
   const [razonExpanded, setRazonExpanded] = useState(false)
   const [nodeUpdateStatus, setNodeUpdateStatus] = useState<Record<number, NodeUpdateStatus>>({})
   const [nodeUpdateError, setNodeUpdateError]   = useState<Record<number, string>>({})
+  const [isValidating, setIsValidating]         = useState(false)
+  const [validateErrors, setValidateErrors]     = useState<Record<number, string[]>>({})
 
-  // Al montar: localStorage (respuesta inmediata) + backend (cubre otros browsers y cambios previos)
+  // Clave de sesión: usa el id de la estrategia para aislar cada run.
+  // Así al generar una nueva estrategia todos los nodos arrancan en 'idle'
+  // aunque hubieran sido enviados en runs anteriores de la misma semana.
+  const sessionKey = strategyId ?? semanaLabel
+
   useEffect(() => {
-    if (!semanaLabel) return
+    if (!sessionKey) return
     const nodos = action.nodos_completos ?? action.propuesta.nodos ?? []
 
-    // 1. localStorage: respuesta instantánea en el mismo browser
+    // 1. localStorage: respuesta instantánea — clave incluye id de estrategia
     const fromCache: Record<number, NodeUpdateStatus> = {}
     nodos.forEach(n => {
-      if (n.id_nodo_cio && localStorage.getItem(`kepler:sent:${semanaLabel}:${n.id_nodo_cio}`)) {
+      if (n.id_nodo_cio && localStorage.getItem(`kepler:sent:${sessionKey}:${n.id_nodo_cio}`)) {
         fromCache[n.orden] = 'success'
       }
     })
     if (Object.keys(fromCache).length > 0) setNodeUpdateStatus(fromCache)
 
-    // 2. Backend: autoridad final — cubre otros browsers y envíos de otros agentes
-    api.getSentNodes(semanaLabel).then(({ sent }) => {
+    // 2. Backend: filtra por created_at de esta estrategia — no carga runs previos
+    api.getSentNodes(semanaLabel, strategyCreatedAt).then(({ sent }) => {
       const sentSet = new Set(sent)
       const fromServer: Record<number, NodeUpdateStatus> = {}
       nodos.forEach(n => {
         if (n.id_nodo_cio && sentSet.has(n.id_nodo_cio)) {
           fromServer[n.orden] = 'success'
-          localStorage.setItem(`kepler:sent:${semanaLabel}:${n.id_nodo_cio}`, '1')
+          localStorage.setItem(`kepler:sent:${sessionKey}:${n.id_nodo_cio}`, '1')
         }
       })
       if (Object.keys(fromServer).length > 0)
         setNodeUpdateStatus(prev => ({ ...prev, ...fromServer }))
     }).catch(() => {})
-  }, [semanaLabel])
+  }, [sessionKey])
 
   async function handleUpdateNode(nodo: StrategyNode, copies: NodeCopies) {
     if (!nodo.id_nodo_cio || !nodo.template_id) return
@@ -1199,7 +1211,7 @@ function StrategyCanvasCard({
         campaign_name: action.campaña_existente_nombre ?? action.step_name ?? undefined,
         semana_label:  semanaLabel || undefined,
       })
-      localStorage.setItem(`kepler:sent:${semanaLabel}:${nodo.id_nodo_cio}`, '1')
+      localStorage.setItem(`kepler:sent:${sessionKey}:${nodo.id_nodo_cio}`, '1')
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'success' }))
     } catch (err) {
       let msg = 'Error al actualizar en CIO — reintentá'
@@ -1214,6 +1226,86 @@ function StrategyCanvasCard({
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'error' }))
     }
   }
+  async function handleValidateAndSend() {
+    const allNodos = action.nodos_completos ?? action.propuesta.nodos ?? []
+    const toSend = allNodos.filter(n =>
+      n.modificado !== false &&
+      n.id_nodo_cio != null &&
+      n.template_id != null &&
+      nodeUpdateStatus[n.orden] !== 'success'
+    )
+    if (toSend.length === 0 || isValidating) return
+
+    setIsValidating(true)
+    setValidateErrors({})
+
+    // Todos los nodos pendientes → loading inmediatamente (efecto visual)
+    setNodeUpdateStatus(prev => {
+      const next = { ...prev }
+      toSend.forEach(n => { next[n.orden] = 'loading' })
+      return next
+    })
+
+    try {
+      const sendFn = isPremium ? api.validateAndSendPremium : api.validateAndSend
+      const { results } = await sendFn({
+        nodes: toSend.map(n => {
+          const editNodo = (action.propuesta.nodos ?? []).find(p =>
+            (n.id_nodo_cio != null && p.id_nodo_cio === n.id_nodo_cio) ||
+            (!!n.nombre && p.nombre === n.nombre)
+          )
+          const resolvedCopies: NodeCopies = editNodo
+            ? (edits.nodeEdits[editNodo.orden] ?? {
+                subject:   toLiquid(editNodo.subject as Parameters<typeof toLiquid>[0]),
+                preheader: editNodo.preheader ? toLiquid(editNodo.preheader as Parameters<typeof toLiquid>[0]) : undefined,
+                cuerpo:    toLiquid(editNodo.cuerpo as Parameters<typeof toLiquid>[0]),
+              })
+            : { subject: n.subject, cuerpo: n.cuerpo, preheader: n.preheader }
+
+          return {
+            id_nodo_cio:   n.id_nodo_cio!,
+            template_id:   n.template_id!,
+            tipo:          n.tipo,
+            subject:       resolvedCopies.subject,
+            cuerpo:        resolvedCopies.cuerpo,
+            preheader:     resolvedCopies.preheader,
+            nombre:        n.nombre,
+            campaign_name: action.campaña_existente_nombre ?? action.step_name ?? undefined,
+            step_code:     action.step_code,
+          }
+        }),
+        semana_label: semanaLabel,
+        user_name:    userName ?? undefined,
+      })
+
+      // Animar resultados uno por uno con stagger de 150ms
+      for (const r of results) {
+        const nodo = toSend.find(n => n.id_nodo_cio === r.id_nodo_cio)
+        if (!nodo) continue
+        await new Promise(res => setTimeout(res, 150))
+
+        if (r.sent) {
+          localStorage.setItem(`kepler:sent:${sessionKey}:${r.id_nodo_cio}`, '1')
+          setNodeUpdateStatus(prev => ({ ...prev, [nodo.orden]: 'success' }))
+        } else {
+          setNodeUpdateStatus(prev => ({ ...prev, [nodo.orden]: 'error' }))
+          if (r.errors?.length) {
+            setValidateErrors(prev => ({ ...prev, [nodo.orden]: r.errors }))
+          }
+        }
+      }
+    } catch {
+      // Fallo total de red — revertir a idle para que el usuario reintente
+      setNodeUpdateStatus(prev => {
+        const next = { ...prev }
+        toSend.forEach(n => { next[n.orden] = 'idle' })
+        return next
+      })
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
   const tipo    = TIPO_CFG[action.tipo_accion]
   const isAlta  = action.prioridad === 'alta'
   const { included } = edits
@@ -1338,19 +1430,75 @@ function StrategyCanvasCard({
             </p>
           </div>
         ) : (action.nodos_completos ?? action.propuesta.nodos ?? []).length > 0 ? (
-          <CampaignFlowCanvas
-            nodos={action.nodos_completos ?? action.propuesta.nodos ?? []}
-            nodosPropuesta={action.propuesta.nodos ?? []}
-            trigger={action.propuesta.trigger_event}
-            goal={action.propuesta.conversion_event}
-            edits={edits}
-            onNodeEdit={onNodeEdit}
-            selectedOrden={selectedNodeOrden}
-            onSelect={setSelectedNodeOrden}
-            nodeUpdateStatus={nodeUpdateStatus}
-            nodeUpdateError={nodeUpdateError}
-            onUpdateNode={handleUpdateNode}
-          />
+          <>
+            <CampaignFlowCanvas
+              nodos={action.nodos_completos ?? action.propuesta.nodos ?? []}
+              nodosPropuesta={action.propuesta.nodos ?? []}
+              trigger={action.propuesta.trigger_event}
+              goal={action.propuesta.conversion_event}
+              edits={edits}
+              onNodeEdit={onNodeEdit}
+              selectedOrden={selectedNodeOrden}
+              onSelect={setSelectedNodeOrden}
+              nodeUpdateStatus={nodeUpdateStatus}
+              nodeUpdateError={nodeUpdateError}
+              onUpdateNode={handleUpdateNode}
+            />
+
+            {/* Botón Validar y enviar todo — solo si hay nodos pendientes */}
+            {(() => {
+              const allNodos = action.nodos_completos ?? action.propuesta.nodos ?? []
+              const pendingCount = allNodos.filter(n =>
+                n.modificado !== false &&
+                n.id_nodo_cio != null &&
+                n.template_id != null &&
+                nodeUpdateStatus[n.orden] !== 'success'
+              ).length
+              if (pendingCount === 0) return null
+
+              return (
+                <div className="mt-3 space-y-2">
+                  <button
+                    onClick={handleValidateAndSend}
+                    disabled={isValidating}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold transition-colors border ${
+                      isValidating
+                        ? 'bg-amber-500/10 text-amber-400/40 border-amber-500/10 cursor-not-allowed'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                    }`}
+                  >
+                    {isValidating && (
+                      <span className="w-3 h-3 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin" />
+                    )}
+                    {isValidating
+                      ? 'Validando y enviando...'
+                      : `Validar y enviar todo (${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''})`
+                    }
+                  </button>
+
+                  {/* Errores de validación por nodo */}
+                  {Object.entries(validateErrors).length > 0 && (
+                    <div className="space-y-1.5">
+                      {Object.entries(validateErrors).map(([ordenStr, errors]) => {
+                        const ordenNum = Number(ordenStr)
+                        const nodo = allNodos.find(n => n.orden === ordenNum)
+                        return (
+                          <div key={ordenStr} className="bg-red-500/6 border border-red-500/20 rounded-lg px-3 py-2">
+                            <p className="text-sm text-red-400 font-semibold mb-1">
+                              {nodo?.nombre ?? `Nodo ${ordenStr}`} — requiere revisión manual
+                            </p>
+                            {errors.map((e, i) => (
+                              <p key={i} className="text-sm text-red-400/70 leading-relaxed">• {e}</p>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </>
         ) : null}
       </div>
     </div>
@@ -1662,18 +1810,12 @@ function initEdits(s: StrategyResult): Record<number, ActionEdit> {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function EstrategiaPage() {
-  const [health, setHealth]               = useState<FunnelStep[] | null>(null)
-  const [healthLoading, setHealthLoading] = useState(true)
   const [safety, setSafety]               = useState<SafetyStatus | null>(null)
-  const [syncing, setSyncing]             = useState(false)
-  const [syncResult, setSyncResult]       = useState<SyncResult | null>(null)
   const [generating, setGenerating]       = useState(false)
-  const [contextoAdicional, setContextoAdicional] = useState('')
   const [strategy, setStrategy]           = useState<StrategyResult | null>(null)
   const [actionEdits, setActionEdits]     = useState<Record<number, ActionEdit>>({})
   const [resumenExpanded, setResumenExpanded] = useState(false)
   const [structuralResumenExpanded, setStructuralResumenExpanded] = useState(false)
-  const [error, setError]                 = useState<string | null>(null)
   const [genError, setGenError]           = useState<string | null>(null)
   const [sysCtx, setSysCtx]               = useState<SystemContext | null>(null)
   const [sysLoading, setSysLoading]       = useState(false)
@@ -1769,45 +1911,42 @@ export default function EstrategiaPage() {
 
     Promise.all([
       api.getStrategyHistory().catch((): StrategyResult[] => []),
+      api.getLatestStructural().catch((): StrategyResult | null => null),
       api.getUltimaSemana().catch((): Record<string, unknown> => ({})),
       api.latestPrediction().catch((): Record<string, unknown> => ({})),
-    ]).then(([histData, ultimaSemana, latestPred]) => {
-      // Signal 2: ultima_semana is empty → nueva proyección ran, new week not filled yet
-      const ultimaWeek = ultimaSemana['semana'] as string | undefined
-
-      // Signal 3: semana_label of latest prediction differs from semana_label of latest strategy
-      // (semana_label = the predicted week, e.g. "25 al 31 de mayo 2026")
-      // Both come from the same prediction → if they differ, the strategy is from a past cycle
+    ]).then(([histData, latestStructural, , latestPred]) => {
       const latestStrat = histData[0] ?? null
       const predLabel  = latestPred['semana_label'] as string | undefined
       const stratLabel = latestStrat?.semana_label ?? null
-      const stratIsStale = !!(predLabel && stratLabel && predLabel !== stratLabel)
+      const structLabel = (latestStructural as StrategyResult | null)?.semana_label ?? null
+
+      const todayISO = new Date().toISOString().slice(0, 10)
+
+      // Una estrategia es stale si su semana_label difiere del label de la predicción activa.
+      // Excepción: cualquier fecha ISO (YYYY-MM-DD) nunca es stale — ocurre cuando el agente
+      // básico no encontró predicción activa y usó la fecha del día. La fecha exacta puede
+      // ser ayer o antes de ayer si se generó fuera del domindo, pero sigue siendo de esta semana.
+      function isStale(label: string | null): boolean {
+        if (!predLabel || !label) return false
+        if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return false  // ISO date → nunca stale
+        return label !== predLabel
+      }
 
       if (predLabel) setLatestPredLabel(predLabel)
 
-      if (flagReset || !ultimaWeek || stratIsStale) {
-        // New projection cycle — start completely fresh
-        setHealthLoading(false)
-        return
-      }
+      if (flagReset) return
 
-      if (latestStrat) {
+      if (latestStrat && !isStale(stratLabel)) {
         setStrategy(latestStrat)
         setActionEdits(initEdits(latestStrat))
       }
 
-      api.getLatestStructural()
-        .then(r => {
-          // Solo usar si corresponde a la misma semana que la estrategia Modo 1
-          if (latestStrat?.semana_label && r.semana_label && r.semana_label === latestStrat.semana_label) {
-            setStructuralResult(r)
-            setStructuralEdits(initEdits(r))
-          }
-        })
-        .catch(() => {})
+      if (latestStructural && !isStale(structLabel)) {
+        setStructuralResult(latestStructural as StrategyResult)
+        setStructuralEdits(initEdits(latestStructural as StrategyResult))
+      }
 
-      api.getFunnelHealth().then(setHealth).catch(() => setHealth([])).finally(() => setHealthLoading(false))
-    }).catch(() => setHealthLoading(false))
+    }).catch(() => {})
   }, [])
 
   async function handleLoadSysCtx() {
@@ -1825,21 +1964,6 @@ export default function EstrategiaPage() {
     }
   }
 
-  async function handleSync() {
-    setSyncing(true)
-    setError(null)
-    setSyncResult(null)
-    try {
-      const r = await api.syncCampaigns()
-      setSyncResult(r)
-      setHealth(await api.getFunnelHealth())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al sincronizar')
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   async function handleStartAnalysis() {
     setGenerating(true)
     setGenError(null)
@@ -1848,7 +1972,8 @@ export default function EstrategiaPage() {
     setStructuralEdits({})
     setStructuralError(null)
     try {
-      const s = await api.generateStrategy(contextoAdicional.trim() || undefined)
+      await api.syncCampaigns().catch(() => {})
+      const s = await api.generatePremium()
       setStrategy(s)
       setActionEdits(initEdits(s))
       setResumenExpanded(false)
@@ -1860,12 +1985,12 @@ export default function EstrategiaPage() {
   }
 
   async function handleGenerateStructural() {
-    if (!strategy) return
     setStructuralGenerating(true)
     setStructuralError(null)
     setStructuralResult(null)
     try {
-      const r = await api.generateStructural(strategy, contextoAdicional.trim() || undefined)
+      await api.syncCampaigns().catch(() => {})
+      const r = await api.generateBasic()
       setStructuralResult(r)
       setStructuralEdits(initEdits(r))
     } catch (e) {
@@ -1892,7 +2017,6 @@ export default function EstrategiaPage() {
     }))
   }
 
-  const { campaignViews, trueGaps } = health ? buildCampaignViews(health) : { campaignViews: [], trueGaps: [] }
   const actionsCount = (strategy?.acciones ?? []).length
 
   return (
@@ -1912,68 +2036,7 @@ export default function EstrategiaPage() {
             </p>
           </div>
 
-          {!isAgent && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 rounded-lg transition-colors disabled:opacity-40 shrink-0"
-            >
-              {syncing ? (
-                <>
-                  <span className="w-3.5 h-3.5 border border-neutral-400 border-t-transparent rounded-full animate-spin" />
-                  Corriendo diagnóstico…
-                </>
-              ) : '↻ Correr diagnóstico'}
-            </button>
-          )}
         </div>
-
-        {/* Feedback */}
-        {error && (
-          <div className="bg-red-500/8 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400">{error}</div>
-        )}
-        {syncResult && (
-          <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-lg px-4 py-3 text-sm text-emerald-400 flex items-center justify-between">
-            <span>
-              ✓ Diagnóstico actualizado — {syncResult.total_synced} campañas cargadas · {syncResult.mapped_to_funnel} mapeadas al funnel
-              {syncResult.unmapped > 0 && ` · ${syncResult.unmapped} sin mapear al funnel`}
-            </span>
-            {syncResult.spike_alerts.length > 0 && (
-              <span className="text-orange-400 text-xs">⚠ {syncResult.spike_alerts.length} spike(s)</span>
-            )}
-          </div>
-        )}
-
-        {/* ── Funnel Diagnostic ─────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-white font-semibold text-lg">Diagnóstico del Funnel</h2>
-              {!healthLoading && health && (
-                <p className="text-neutral-500 text-xs mt-0.5">
-                  {campaignViews.length} campañas activas · {trueGaps.length} pasos sin cobertura
-                </p>
-              )}
-            </div>
-          </div>
-
-          {healthLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-neutral-900 border border-neutral-800 rounded-xl h-32 animate-pulse" />
-              ))}
-            </div>
-          ) : health && health.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {campaignViews.map(v => <CampaignDiagnosticCard key={v.cid} view={v} />)}
-            </div>
-          ) : (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
-              <p className="text-neutral-400 mb-1">No hay datos del diagnóstico todavía</p>
-              <p className="text-neutral-600 text-sm">Hacé clic en "Correr diagnóstico" para cargar el estado de tus campañas</p>
-            </div>
-          )}
-        </section>
 
         {/* ── Strategy Generation ───────────────────────────────────────────── */}
         <section>
@@ -1999,22 +2062,6 @@ export default function EstrategiaPage() {
                     Cruza la predicción del modelo con tus campañas, noticias de la semana e iniciativas de trii para decidir qué optimizar y cómo.
                   </p>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-neutral-500 uppercase tracking-wider font-medium mb-2">
-                  Noticias, iniciativas y contexto de esta semana
-                </label>
-                <textarea
-                  value={contextoAdicional}
-                  onChange={e => setContextoAdicional(e.target.value)}
-                  rows={3}
-                  placeholder={`Noticias, eventos, situaciones internas, competencia...\n\nEj: "Esta semana lanzamos la jornada sin comisiones el martes 13. TRM en máximos históricos."`}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3.5 py-3 text-sm text-neutral-200 placeholder:text-neutral-600 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500/40 hover:border-neutral-600 transition-colors leading-relaxed"
-                />
-                <p className="text-neutral-700 text-xs mt-1.5">
-                  Tiene peso especial en el copy y en el análisis de la semana.
-                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2">
@@ -2121,6 +2168,9 @@ export default function EstrategiaPage() {
                         assignedTo={getCampaignOwner(action)}
                         userName={currentUser?.name ?? null}
                         semanaLabel={strategy.semana_label ?? ''}
+                        strategyId={strategy._id}
+                        strategyCreatedAt={strategy._created_at}
+                        isPremium={true}
                       />
                     )
                   })}
@@ -2134,47 +2184,26 @@ export default function EstrategiaPage() {
           )}
         </section>
 
-        {/* ── Fase 2B: Revisión de todas las campañas ────────────────────────── */}
-        {strategy && !generating && showMode2Section && (
+        {/* ── Agente básico: campañas de onboarding ─────────────────────────── */}
+        {showMode2Section && (
           <section>
             <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-white font-semibold text-lg">Revisión del resto de campañas</h2>
+              <h2 className="text-white font-semibold text-lg">Agente básico — Onboarding</h2>
               <div className="flex-1 h-px bg-neutral-800" />
             </div>
 
-            {/* Campañas ya cubiertas por el análisis principal */}
-            {strategy.acciones.filter(a => a.campaña_existente_id).length > 0 && (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
-                <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium mb-2">
-                  Ya cubiertas en el análisis principal — no se repiten acá
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {strategy.acciones
-                    .filter(a => a.campaña_existente_id)
-                    .map(a => (
-                      <span
-                        key={a.campaña_existente_id}
-                        className="text-[10px] bg-neutral-800 text-neutral-500 border border-neutral-700 px-2.5 py-1 rounded-full"
-                      >
-                        {a.campaña_existente_nombre ?? a.campaña_existente_id}
-                      </span>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Formulario — muestra si no hay resultado O si el usuario quiere reanalizat */}
+            {/* Formulario — muestra si no hay resultado */}
             {!structuralResult && !structuralGenerating && (
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="text-lg">🔍</span>
+                    <span className="text-lg">📅</span>
                   </div>
                   <div>
-                    <p className="text-white text-sm font-semibold mb-0.5">Revisar campañas restantes</p>
+                    <p className="text-white text-sm font-semibold mb-0.5">Actualizar copy de campañas de onboarding</p>
                     <p className="text-neutral-500 text-xs leading-relaxed">
-                      El sistema leerá automáticamente la estructura y contenido de las campañas
-                      que no fueron intervenidas en el análisis principal.
+                      Consulta el calendario colombiano (festivos, quincena, prima, BanRep) y ajusta
+                      el copy transaccional de las campañas de registro según el contexto de la semana.
                     </p>
                   </div>
                 </div>
@@ -2190,7 +2219,7 @@ export default function EstrategiaPage() {
                     onClick={handleGenerateStructural}
                     className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-colors"
                   >
-                    Revisar campañas
+                    Generar copy onboarding
                   </button>
                 </div>
               </div>
@@ -2217,7 +2246,7 @@ export default function EstrategiaPage() {
 
                   {/* Header */}
                   <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
-                    <h3 className="text-white font-semibold">Qué encontramos en el resto de campañas</h3>
+                    <h3 className="text-white font-semibold">Copy de onboarding — contexto de la semana</h3>
                     <div className="flex items-center gap-2 shrink-0">
                       {structuralResult.estado_funnel && (
                         <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${ESTADO_CFG[structuralResult.estado_funnel]?.cls}`}>

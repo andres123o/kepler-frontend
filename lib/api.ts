@@ -35,13 +35,6 @@ export const api = {
   getFunnelHealth: () => apiFetch<FunnelStep[]>('/api/strategy/funnel-health'),
   syncCampaigns: () => apiFetch<SyncResult>('/api/strategy/sync', { method: 'POST' }),
   getSafetyStatus: () => apiFetch<SafetyStatus>('/api/strategy/safety-status'),
-  generateStrategy: (contextoAdicional?: string) =>
-    apiFetch<StrategyResult>('/api/strategy/generate', {
-      method: 'POST',
-      body: JSON.stringify({
-        contexto_adicional: contextoAdicional ?? null,
-      }),
-    }),
   executeStrategy: (strategy: StrategyResult) =>
     apiFetch<ExecuteResult>('/api/strategy/execute', {
       method: 'POST',
@@ -52,21 +45,61 @@ export const api = {
   getStrategyHistory: () => apiFetch<StrategyResult[]>('/api/strategy/history'),
   getLatestStructural: () => apiFetch<StrategyResult>('/api/strategy/latest-structural'),
   getAssignments: () => apiFetch<{ user_name: string; campaign_name: string }[]>('/api/strategy/assignments'),
-  generateStructural: (phase2Strategy: StrategyResult, contextoAdicional?: string) =>
-    apiFetch<StrategyResult>('/api/strategy/generate-structural', {
-      method: 'POST',
-      body: JSON.stringify({
-        phase2_strategy: phase2Strategy,
-        contexto_adicional: contextoAdicional ?? null,
-      }),
-    }),
+  generatePremium: () =>
+    apiFetch<StrategyResult>('/api/strategy/generate-premium', { method: 'POST' }),
+  generateBasic: () =>
+    apiFetch<StrategyResult>('/api/strategy/generate-basic', { method: 'POST' }),
   updateNode: (payload: { action_id: number; template_id: number; subject: string; cuerpo: string; preheader?: string; user_name?: string; campaign_name?: string; semana_label?: string }) =>
     apiFetch<{ ok: boolean; action_id: number; template_id: number }>('/api/strategy/update-node', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  getSentNodes: (semanaLabel: string) =>
-    apiFetch<{ semana_label: string; sent: number[] }>(`/api/strategy/sent-nodes?semana_label=${encodeURIComponent(semanaLabel)}`),
+  getSentNodes: (semanaLabel: string, after?: string) =>
+    apiFetch<{ semana_label: string; sent: number[] }>(
+      `/api/strategy/sent-nodes?semana_label=${encodeURIComponent(semanaLabel)}${after ? `&after=${encodeURIComponent(after)}` : ''}`
+    ),
+  validateAndSendPremium: (payload: {
+    nodes: { id_nodo_cio: number; template_id: number; tipo: string; subject: string; cuerpo: string; preheader?: string; nombre?: string; campaign_name?: string; step_code?: string }[]
+    semana_label: string
+    user_name?: string
+  }) => apiFetch<{
+    results: { id_nodo_cio: number; status: string; errors: string[]; warnings: string[]; sent: boolean; layer?: string }[]
+    total_sent: number
+    total_blocked: number
+  }>('/api/strategy/validate-and-send-premium', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  validateAndSend: (payload: {
+    nodes: Array<{
+      id_nodo_cio: number
+      template_id: number
+      tipo: string
+      subject: string
+      cuerpo: string
+      preheader?: string
+      nombre?: string
+      campaign_name?: string
+      step_code?: string
+    }>
+    semana_label: string
+    user_name?: string
+  }) =>
+    apiFetch<{
+      results: Array<{
+        id_nodo_cio: number
+        status: 'listo' | 'cambios'
+        layer: 'L1' | 'L2' | 'sent' | 'send_error'
+        errors: string[]
+        warnings: string[]
+        sent: boolean
+      }>
+      total_sent: number
+      total_blocked: number
+    }>('/api/strategy/validate-and-send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getAdminStatus: () =>
     apiFetch<{ user_name: string; campaign_name: string; nodes_updated: number; nodes_total: number | null; nodes_pending: number | null; semana_label: string | null; last_update: string | null; status: 'done' | 'partial' | 'pending' }[]>('/api/strategy/admin-status'),
 
@@ -94,6 +127,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(entry),
     }),
+  deleteKnowledgeBaseEntry: (id: string) =>
+    apiFetch<{ ok: boolean; deleted: string }>(`/api/config/knowledge-base/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // ── Auto-fetch variables macro ──────────────────────────────────────────
+  fetchAutoVariables: (semana: string, banrepTasa?: number | null) => {
+    let url = `/api/data/auto-variables?semana=${encodeURIComponent(semana)}`
+    if (banrepTasa != null) url += `&banrep_tasa=${banrepTasa}`
+    return apiFetch<AutoVariablesResult>(url, { signal: AbortSignal.timeout(300_000) })
+  },
 
   // ── Medición Fase 4 ─────────────────────────────────────────────────────
   bqStatus: () => apiFetch<{ configured: boolean; message: string }>('/api/measure/status'),
@@ -117,6 +161,15 @@ export const api = {
     }),
   listSnapshots: () => apiFetch<MeasurementSnapshot[]>('/api/measure/snapshots'),
   getSnapshot: (id: string) => apiFetch<MeasurementSnapshot>(`/api/measure/snapshots/${id}`),
+}
+
+// ── Auto-fetch variables macro ─────────────────────────────────────────────
+
+export interface AutoVariablesResult {
+  semana: string
+  values: Record<string, number | null>
+  status: Record<string, 'ok' | 'error' | 'pending'>
+  errors: string[]
 }
 
 export interface ShapItem {
@@ -190,10 +243,18 @@ export interface MetricsWeeklyJson {
   series: WeeklySeries
 }
 
+export interface CampaignNode {
+  id?: number | null
+  type: 'email_action' | 'push_notification_action'
+  name: string
+}
+
 export interface CampaignSummary {
   cio_campaign_id: string
   name: string
   status: string | null
+  funnel_step_name?: string | null
+  funnel_step_code?: string | null
   goal_event?: string | null
   delivery_rate: number
   open_rate: number
@@ -202,8 +263,13 @@ export interface CampaignSummary {
   total_sent: number
   converted: number
   undeliverable: number
+  human_opened: number
+  clicked: number
+  spike_alert?: boolean
+  last_synced_at?: string | null
   metrics_weekly_json: MetricsWeeklyJson | null
   n_nodos?: number | null
+  node_list?: CampaignNode[]
   warnings?: string[]
 }
 

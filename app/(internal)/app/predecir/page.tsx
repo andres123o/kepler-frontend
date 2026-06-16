@@ -167,16 +167,43 @@ export default function PredecirPage() {
 
   const r = result!
 
+  // Variables internas de funnel/KYC — solo se muestran en detalle técnico
+  const INTERNAL_VARS = new Set([
+    'step_09_full_account', 'tasa_basic_a_risk', 'tasa_risk_a_fulldata',
+    'tasa_fulldata_a_video', 'tasa_video_a_review',
+    'pct_perfil_conservador', 'pct_perfil_arriesgado', 'full_users_aprobados',
+  ])
+
+  // Variables derivadas del histórico — no accionables directamente, fuera de Factores clave
+  const DERIVED_VARS = new Set([
+    'lag_1_target', 'aprobados_ponderados', 'full_users_aprobados_lag1',
+  ])
+
   const ctxMap = Object.fromEntries(
     r.contexto_historico_top_features.map(c => [c.feature, c])
   )
 
-  const shapPos    = r.shap_top.filter(s => s.contribution > 0).slice(0, 8)
-  const shapNeg    = r.shap_top.filter(s => s.contribution < 0).slice(0, 8)
-  const maxContrib = Math.max(...r.shap_top.map(s => Math.abs(s.contribution)), 1)
+  // Vistas de marketing — sin variables internas de funnel
+  const shapExt    = r.shap_top.filter(s => !INTERNAL_VARS.has(s.feature) && !DERIVED_VARS.has(s.feature))
+  const shapPos    = shapExt.filter(s => s.contribution > 0).slice(0, 8)
+  const shapNeg    = shapExt.filter(s => s.contribution < 0).slice(0, 8)
+  const maxContrib = Math.max(...shapExt.map(s => Math.abs(s.contribution)), 1)
 
-  const nCritica = r.prescripcion.filter(p => p.severidad === 'crítica').length
-  const nAlerta  = r.prescripcion.filter(p => p.severidad === 'alerta').length
+  const prescripcionExt = [...r.contexto_historico_top_features]
+    .filter(c => !INTERNAL_VARS.has(c.feature) && !DERIVED_VARS.has(c.feature) && c.z_score != null)
+    .sort((a, b) => Math.abs(b.z_score!) - Math.abs(a.z_score!))
+    .slice(0, 3)
+    .map(c => {
+      const z = c.z_score as number
+      return {
+        variable: c.feature,
+        z_score: z,
+        contribucion_depositos: c.shap_contribution,
+        severidad: Math.abs(z) > 2.0 ? 'crítica' : Math.abs(z) > 1.5 ? 'alerta' : 'monitorear',
+      }
+    })
+  const nCritica = prescripcionExt.filter(p => p.severidad === 'crítica').length
+  const nAlerta  = prescripcionExt.filter(p => p.severidad === 'alerta').length
   const rangoMin = r.prediccion_siguiente_semana - (r.mae_modelo ?? 0)
   const rangoMax = r.prediccion_siguiente_semana + (r.mae_modelo ?? 0)
 
@@ -184,7 +211,7 @@ export default function PredecirPage() {
     const partes: string[] = []
     if (nCritica > 0) partes.push(`${nCritica} señal${nCritica > 1 ? 'es' : ''} crítica${nCritica > 1 ? 's' : ''}`)
     if (nAlerta > 0)  partes.push(`${nAlerta} alerta${nAlerta > 1 ? 's' : ''}`)
-    if (partes.length === 0 && r.prescripcion.length > 0) partes.push(`${r.prescripcion.length} señales`)
+    if (partes.length === 0 && prescripcionExt.length > 0) partes.push(`${prescripcionExt.length} señales`)
     return partes.join(' y ')
   }
 
@@ -269,7 +296,7 @@ export default function PredecirPage() {
                 {Math.abs(r.brecha_vs_baseline).toLocaleString('es-CO')}{' '}
                 {r.brecha_vs_baseline >= 0 ? 'por encima' : 'por debajo'} de la línea base
               </span>
-              {r.prescripcion.length > 0 && resumenSenales() && (
+              {prescripcionExt.length > 0 && resumenSenales() && (
                 <>
                   {'. '}
                   El modelo detectó{' '}
@@ -282,21 +309,24 @@ export default function PredecirPage() {
         </div>
 
         {/* Señales */}
-        {r.prescripcion.length > 0 && (
+        {prescripcionExt.length > 0 && (
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
             <div className="mb-5">
               <h2 className="text-white font-semibold text-sm">Señales para actuar esta semana</h2>
               <p className="text-neutral-500 text-xs mt-1">
-                Variables con comportamiento inusual que más están moviendo la proyección
+                Variables externas con comportamiento inusual que más están moviendo la proyección
               </p>
             </div>
 
             <div className="space-y-3">
-              {r.prescripcion.map(item => {
+              {prescripcionExt.map(item => {
                 const sev    = SEV[item.severidad] ?? SEV.monitorear
                 const ctx    = ctxMap[item.variable]
                 const cambio = ctx ? describeCambio(ctx) : null
                 const impacto = item.contribucion_depositos
+                const pctProyeccion = r.prediccion_siguiente_semana > 0
+                  ? (Math.abs(impacto) / r.prediccion_siguiente_semana) * 100
+                  : 0
 
                 return (
                   <div
@@ -330,11 +360,11 @@ export default function PredecirPage() {
                       )}
                     </div>
 
-                    <div className="text-right shrink-0 min-w-[64px]">
+                    <div className="text-right shrink-0 min-w-[72px]">
                       <p className={`text-xl font-bold tabular-nums ${impacto >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {impacto >= 0 ? '+' : ''}{impacto.toFixed(0)}
+                        {impacto >= 0 ? '+' : '−'}{pctProyeccion.toFixed(1)}%
                       </p>
-                      <p className="text-neutral-500 text-[10px] leading-tight">depósitos</p>
+                      <p className="text-neutral-500 text-[10px] leading-tight">de la proyección</p>
                     </div>
                   </div>
                 )

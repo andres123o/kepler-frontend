@@ -3,75 +3,90 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 
+// ─── Campos del modelo v2 ─────────────────────────────────────────────────────
+
+const AUTO_FIELDS = new Set([
+  'trm',
+  'sp500_cambio_semanal_pct',
+  'brent_cambio_semanal_pct',
+  'colcap_cambio_semanal_pct',
+  'spread_tes_banrep',
+  'trends_cdt',
+  'trends_acciones',
+  'pct_dias_quincena',
+])
+
 const GROUPS = [
   {
-    title: 'Funnel de conversión',
+    id: 'funnel',
+    title: 'Funnel KYC',
+    description: 'Métricas de conversión internas de Trii',
     fields: [
-      { key: 'usuarios_registro_base', label: 'Registros base' },
-      { key: 'step_09_full_account', label: 'Full account (step 9)' },
-      { key: 'tasa_basic_a_risk', label: 'Tasa basic → risk (%)' },
-      { key: 'tasa_risk_a_fulldata', label: 'Tasa risk → full data (%)' },
-      { key: 'tasa_fulldata_a_video', label: 'Tasa full data → video (%)' },
-      { key: 'tasa_video_a_review', label: 'Tasa video → review (%)' },
-      { key: 'tasa_review_a_aprobado', label: 'Tasa review → aprobado (%)' },
-      { key: 'tasa_registro_a_aprobado', label: 'Tasa registro → aprobado (%)' },
-      { key: 'tasa_rechazo_implicita_kyc', label: 'Tasa rechazo implícita KYC (%)' },
-      { key: 'mediana_dias_registro_a_full', label: 'Mediana días registro → full' },
+      { key: 'step_09_full_account',   label: 'Full account (step 9)' },
+      { key: 'tasa_basic_a_risk',      label: 'Tasa basic → risk (%)' },
+      { key: 'tasa_risk_a_fulldata',   label: 'Tasa risk → full data (%)' },
+      { key: 'tasa_fulldata_a_video',  label: 'Tasa full data → video (%)' },
+      { key: 'tasa_video_a_review',    label: 'Tasa video → review (%)' },
       { key: 'pct_perfil_conservador', label: '% perfil conservador' },
-      { key: 'pct_perfil_arriesgado', label: '% perfil arriesgado' },
-      { key: 'full_users_aprobados', label: 'Full users aprobados' },
+      { key: 'pct_perfil_arriesgado',  label: '% perfil arriesgado' },
+      { key: 'full_users_aprobados',   label: 'Full users aprobados' },
     ],
   },
   {
-    title: 'Canales',
+    id: 'macro-auto',
+    title: 'Macro — automático',
+    description: 'Se obtienen automáticamente con el botón de abajo según la fecha de la semana',
+    autoFetch: true,
     fields: [
-      { key: 'push_mail_delivered_pre_deposito', label: 'Entregados pre-depósito' },
-      { key: 'push_mail_converted_pre_deposito', label: 'Convertidos pre-depósito' },
+      { key: 'trm',                       label: 'TRM (COP/USD)' },
+      { key: 'colcap_cambio_semanal_pct', label: 'COLCAP variación semanal (%)' },
+      { key: 'sp500_cambio_semanal_pct',  label: 'S&P 500 variación semanal (%)' },
+      { key: 'brent_cambio_semanal_pct',  label: 'Brent variación semanal (%)' },
+      { key: 'spread_tes_banrep',         label: 'Spread TES 10Y − BanRep (%)' },
+      { key: 'trends_cdt',                label: 'Google Trends — CDT' },
+      { key: 'trends_acciones',           label: 'Google Trends — bolsa de valores' },
+      { key: 'pct_dias_quincena',         label: '% días quincena' },
     ],
   },
   {
-    title: 'Soporte',
-    fields: [
-      { key: 'cx_friccion_kyc', label: 'CX fricción KYC' },
-      { key: 'cx_bloqueos', label: 'CX bloqueos' },
-    ],
-  },
-  {
-    title: 'Macro',
-    fields: [
-      { key: 'tasa_intervencion_mensual', label: 'Tasa intervención mensual (%)' },
-      { key: 'trm', label: 'TRM' },
-      { key: 'variacion_colcap', label: 'Variación COLCAP (%)' },
-    ],
-  },
-  {
+    id: 'resultado',
     title: 'Resultado real',
-    description: 'Opcional — completar cuando se conozca el valor real de esta semana',
+    description: 'Completar cuando se conozca el valor real de esta semana',
     fields: [
       { key: 'usuarios_primer_cashin', label: 'Primer cash-in real' },
-      { key: 'intervencion_kepler', label: 'Intervención Kepler (0 = no · 1 = sí)' },
+    ],
+  },
+  {
+    id: 'metadata',
+    title: 'Metadata',
+    description: 'Para semanas atípicas o con intervención externa',
+    fields: [
+      { key: 'es_exogeno', label: 'Semana exógena (0 = normal · 1 = excluir del modelo)' },
     ],
   },
 ]
 
 type FormValues = Record<string, string>
-
+type AutoStatus = Record<string, 'ok' | 'error' | 'pending' | 'idle'>
 type PageState = 'loading' | 'has_data' | 'empty'
 
 export default function IngresarPage() {
   const router = useRouter()
-  const [pageState, setPageState] = useState<PageState>('loading')
-  const [semanaActual, setSemanaActual] = useState('')  // semana que ya está en ultima_semana
-  const [semana, setSemana] = useState('')
-  const [form, setForm] = useState<FormValues>({})
-  const [archiving, setArchiving] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [pageState, setPageState]   = useState<PageState>('loading')
+  const [semanaActual, setSemanaActual] = useState('')
+  const [semana, setSemana]         = useState('')
+  const [form, setForm]             = useState<FormValues>({})
+  const [archiving, setArchiving]   = useState(false)
+  const [saving, setSaving]         = useState(false)
   const [predicting, setPredicting] = useState(false)
+  const [autoFetching, setAutoFetching] = useState(false)
+  const [autoStatus, setAutoStatus] = useState<AutoStatus>({})
+  const [autoErrors, setAutoErrors] = useState<string[]>([])
+  const [banrepTasa, setBanrepTasa] = useState('')
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   useEffect(() => {
-    api
-      .getUltimaSemana()
+    api.getUltimaSemana()
       .then(data => {
         const s = (data.semana as string) ?? ''
         if (s) {
@@ -94,7 +109,6 @@ export default function IngresarPage() {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  // Archiva semana actual → master y limpia el form para la semana nueva
   async function handleNuevaProyeccion() {
     const ok = confirm(
       `¿Archivar la semana ${semanaActual} en master_consolidado_final y abrir la semana nueva?`
@@ -108,12 +122,59 @@ export default function IngresarPage() {
       setSemanaActual('')
       setSemana('')
       setForm({})
+      setAutoStatus({})
+      setBanrepTasa('')
       setPageState('empty')
       setMsg({ type: 'ok', text: `Semana ${res.semana_archivada} archivada. Ingresá los datos de la semana nueva.` })
     } catch (err) {
       setMsg({ type: 'err', text: err instanceof Error ? err.message : 'Error al archivar' })
     } finally {
       setArchiving(false)
+    }
+  }
+
+  async function handleAutoFetch() {
+    if (!semana.trim()) {
+      setMsg({ type: 'err', text: 'Ingresá la semana primero (DD/MM/YYYY)' })
+      return
+    }
+    setAutoFetching(true)
+    setAutoStatus({})
+    setAutoErrors([])
+    setMsg({ type: 'ok', text: 'Obteniendo datos macro... los Google Trends pueden tardar hasta 60 s.' })
+    try {
+      const banrep = banrepTasa.trim() ? parseFloat(banrepTasa.trim()) : null
+      const result = await api.fetchAutoVariables(semana.trim(), banrep)
+
+      // Pre-llenar campos con valores obtenidos
+      setForm(prev => {
+        const next = { ...prev }
+        for (const [field, value] of Object.entries(result.values)) {
+          if (value !== null && value !== undefined) {
+            next[field] = String(value)
+          }
+        }
+        return next
+      })
+
+      setAutoStatus(result.status as AutoStatus)
+      setAutoErrors(result.errors)
+
+      const nOk  = Object.values(result.status).filter(s => s === 'ok').length
+      const nErr = Object.values(result.status).filter(s => s === 'error').length
+
+      if (nErr === 0) {
+        setMsg({ type: 'ok', text: `${nOk} variables obtenidas correctamente.` })
+      } else {
+        setMsg({
+          type: 'err',
+          text: `${nOk} ok · ${nErr} no disponibles (podés ingresarlas manualmente).`,
+        })
+      }
+    } catch (err) {
+      setMsg({ type: 'err', text: err instanceof Error ? err.message : 'Error al obtener datos automáticos' })
+    } finally {
+      setAutoFetching(false)
     }
   }
 
@@ -151,7 +212,7 @@ export default function IngresarPage() {
     setMsg(null)
     try {
       await api.saveUltimaSemana(payload)
-      await api.predict()          // guarda resultado en prediction_results
+      await api.predict()
       router.push('/app/predecir')
     } catch (err) {
       setMsg({ type: 'err', text: err instanceof Error ? err.message : 'Error al proyectar' })
@@ -180,7 +241,6 @@ export default function IngresarPage() {
           </p>
         </div>
 
-        {/* Botón "Nueva proyección" — solo visible cuando ya hay datos */}
         {pageState === 'has_data' && (
           <button
             onClick={handleNuevaProyeccion}
@@ -199,11 +259,10 @@ export default function IngresarPage() {
         )}
       </div>
 
-      {/* Info banner cuando hay datos en sistema */}
       {pageState === 'has_data' && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
           <p className="text-amber-300 text-sm">
-            <strong>Es domingo?</strong> Hacé click en &quot;Nueva proyección&quot; para archivar la semana{' '}
+            <strong>¿Es domingo?</strong> Hacé click en &quot;Nueva proyección&quot; para archivar la semana{' '}
             <strong>{semanaActual}</strong> e ingresar los datos de la semana nueva.
           </p>
         </div>
@@ -220,33 +279,112 @@ export default function IngresarPage() {
           placeholder="04/05/2026"
           className="bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2.5 text-white text-sm w-52 focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
-        <p className="text-neutral-500 text-xs mt-2">Formato DD/MM/YYYY — fecha de inicio de la semana</p>
+        <p className="text-neutral-500 text-xs mt-2">Formato DD/MM/YYYY — fecha de inicio (lunes) de la semana</p>
       </div>
 
       {/* Field groups */}
       <div className="space-y-5">
         {GROUPS.map(group => (
-          <section key={group.title} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-            <h2 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-1">
-              {group.title}
-            </h2>
+          <section key={group.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                {group.title}
+              </h2>
+
+              {/* Input BanRep + botón auto-fetch solo en el grupo macro-auto */}
+              {group.autoFetch && (
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] text-neutral-500 leading-none">
+                      Tasa BanRep (%) <span className="text-amber-500/70">para spread</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="ej. 10.25"
+                      value={banrepTasa}
+                      onChange={e => setBanrepTasa(e.target.value)}
+                      className="w-24 bg-neutral-800 border border-neutral-700 rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAutoFetch}
+                    disabled={autoFetching || !semana.trim()}
+                    className="flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 disabled:opacity-40 border border-amber-500/30 text-amber-300 font-medium rounded-lg px-3 py-1.5 text-xs transition-colors self-end"
+                  >
+                    {autoFetching ? (
+                      <>
+                        <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                        Obteniendo...
+                      </>
+                    ) : (
+                      <>
+                        <span>⚡</span>
+                        Obtener datos automáticos
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {group.description && (
               <p className="text-neutral-500 text-xs mb-3">{group.description}</p>
             )}
+
+            {autoFetching && group.autoFetch && (
+              <p className="text-amber-400/70 text-xs mb-3 animate-pulse">
+                Fetching yfinance + Google Trends... puede tardar hasta 60 s (pausa anti-rate-limit incluida)
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-3 mt-3">
-              {group.fields.map(f => (
-                <div key={f.key}>
-                  <label className="block text-xs text-neutral-400 mb-1">{f.label}</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form[f.key] ?? ''}
-                    onChange={e => set(f.key, e.target.value)}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              ))}
+              {group.fields.map(f => {
+                const fieldStatus = autoStatus[f.key]
+                const isAuto = AUTO_FIELDS.has(f.key)
+                const wasAutoFilled = isAuto && fieldStatus === 'ok'
+                const hadError = isAuto && fieldStatus === 'error'
+
+                return (
+                  <div key={f.key}>
+                    <label className="flex items-center gap-1.5 text-xs text-neutral-400 mb-1">
+                      {f.label}
+                      {wasAutoFilled && (
+                        <span className="text-emerald-400 text-[10px] font-medium">⚡ auto</span>
+                      )}
+                      {hadError && (
+                        <span className="text-red-400 text-[10px] font-medium">✗ manual</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={form[f.key] ?? ''}
+                      onChange={e => set(f.key, e.target.value)}
+                      className={[
+                        'w-full bg-neutral-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 transition-colors',
+                        wasAutoFilled
+                          ? 'border border-emerald-500/40 focus:ring-emerald-500'
+                          : hadError
+                            ? 'border border-red-500/40 focus:ring-red-500'
+                            : 'border border-neutral-700 focus:ring-amber-500',
+                      ].join(' ')}
+                    />
+                  </div>
+                )
+              })}
             </div>
+
+            {/* Errores de auto-fetch en el grupo macro-auto */}
+            {group.autoFetch && autoErrors.length > 0 && !autoFetching && (
+              <ul className="mt-3 space-y-1">
+                {autoErrors.map((e, i) => (
+                  <li key={i} className="text-red-400/70 text-xs">
+                    ✗ {e}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         ))}
       </div>

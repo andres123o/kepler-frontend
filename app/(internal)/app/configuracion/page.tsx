@@ -316,14 +316,18 @@ function CampaignsSection() {
 function KBRow({
   entry,
   onChange,
+  onDelete,
 }: {
   entry: KnowledgeBaseEntry
   onChange: (updated: KnowledgeBaseEntry) => void
+  onDelete: (id: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState({ titulo: entry.titulo, contenido: entry.contenido })
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function handleToggle() {
     setToggling(true)
@@ -332,6 +336,18 @@ function KBRow({
       onChange(updated as KnowledgeBaseEntry)
     } finally {
       setToggling(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirming) { setConfirming(true); return }
+    setDeleting(true)
+    try {
+      await api.deleteKnowledgeBaseEntry(entry.id!)
+      onDelete(entry.id!)
+    } finally {
+      setDeleting(false)
+      setConfirming(false)
     }
   }
 
@@ -386,12 +402,33 @@ function KBRow({
           </button>
         </Td>
         <Td>
-          <button
-            onClick={() => setEditing(e => !e)}
-            className="text-xs text-neutral-600 hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
-          >
-            {editing ? 'Cerrar' : 'Editar'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setEditing(e => !e)}
+              className="text-xs text-neutral-600 hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
+            >
+              {editing ? 'Cerrar' : 'Editar'}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className={`text-xs transition-colors disabled:opacity-40 ${
+                confirming
+                  ? 'text-red-400 hover:text-red-300'
+                  : 'text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100'
+              }`}
+            >
+              {deleting ? '…' : confirming ? '¿Confirmar?' : 'Eliminar'}
+            </button>
+            {confirming && !deleting && (
+              <button
+                onClick={() => setConfirming(false)}
+                className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
         </Td>
       </tr>
 
@@ -458,6 +495,11 @@ function KnowledgeBaseSection() {
 
   function handleChange(updated: KnowledgeBaseEntry) {
     setEntries(prev => prev?.map(e => e.id === updated.id ? updated : e) ?? [])
+  }
+
+  function handleDeleted(id: string) {
+    setEntries(prev => prev?.filter(e => e.id !== id) ?? [])
+    setSuccess('Entrada eliminada de la Knowledge Base.')
   }
 
   async function handleAdd() {
@@ -585,7 +627,7 @@ function KnowledgeBaseSection() {
               </thead>
               <tbody>
                 {entries.map(e => (
-                  <KBRow key={e.id} entry={e} onChange={handleChange} />
+                  <KBRow key={e.id} entry={e} onChange={handleChange} onDelete={handleDeleted} />
                 ))}
               </tbody>
             </table>

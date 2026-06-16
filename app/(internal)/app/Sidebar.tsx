@@ -8,6 +8,7 @@ const NAV = [
   { href: '/app/ingresar',   label: 'Ingresar datos',        adminOnly: true },
   { href: '/app/predecir',   label: 'Proyección' },
   { href: '/app/estrategia', label: 'Estrategia' },
+  { href: '/app/campanas',   label: 'Campañas' },
   { href: '/app/medicion',   label: 'Métricas y Resultados' },
 ]
 
