@@ -1139,8 +1139,6 @@ function StrategyCanvasCard({
   assignedTo = null,
   userName = null,
   semanaLabel = '',
-  strategyId,
-  strategyCreatedAt,
   isPremium = false,
 }: {
   action: StrategyAction
@@ -1152,8 +1150,6 @@ function StrategyCanvasCard({
   assignedTo?: string | null
   userName?: string | null
   semanaLabel?: string
-  strategyId?: string
-  strategyCreatedAt?: string
   isPremium?: boolean
 }) {
   const [selectedNodeOrden, setSelectedNodeOrden] = useState<number | null>(null)
@@ -1163,38 +1159,23 @@ function StrategyCanvasCard({
   const [isValidating, setIsValidating]         = useState(false)
   const [validateErrors, setValidateErrors]     = useState<Record<number, string[]>>({})
 
-  // Clave de sesión: usa el id de la estrategia para aislar cada run.
-  // Así al generar una nueva estrategia todos los nodos arrancan en 'idle'
-  // aunque hubieran sido enviados en runs anteriores de la misma semana.
-  const sessionKey = strategyId ?? semanaLabel
-
   useEffect(() => {
-    if (!sessionKey) return
+    if (!semanaLabel) return
     const nodos = action.nodos_completos ?? action.propuesta.nodos ?? []
 
-    // 1. localStorage: respuesta instantánea — clave incluye id de estrategia
-    const fromCache: Record<number, NodeUpdateStatus> = {}
-    nodos.forEach(n => {
-      if (n.id_nodo_cio && localStorage.getItem(`kepler:sent:${sessionKey}:${n.id_nodo_cio}`)) {
-        fromCache[n.orden] = 'success'
-      }
-    })
-    if (Object.keys(fromCache).length > 0) setNodeUpdateStatus(fromCache)
-
-    // 2. Backend: filtra por created_at de esta estrategia — no carga runs previos
-    api.getSentNodes(semanaLabel, strategyCreatedAt).then(({ sent }) => {
+    // Solo Supabase — node_update_log persiste entre sesiones y dispositivos
+    api.getSentNodes(semanaLabel).then(({ sent }) => {
       const sentSet = new Set(sent)
       const fromServer: Record<number, NodeUpdateStatus> = {}
       nodos.forEach(n => {
         if (n.id_nodo_cio && sentSet.has(n.id_nodo_cio)) {
           fromServer[n.orden] = 'success'
-          localStorage.setItem(`kepler:sent:${sessionKey}:${n.id_nodo_cio}`, '1')
         }
       })
       if (Object.keys(fromServer).length > 0)
         setNodeUpdateStatus(prev => ({ ...prev, ...fromServer }))
     }).catch(() => {})
-  }, [sessionKey])
+  }, [semanaLabel])
 
   async function handleUpdateNode(nodo: StrategyNode, copies: NodeCopies) {
     if (!nodo.id_nodo_cio || !nodo.template_id) return
@@ -1211,7 +1192,6 @@ function StrategyCanvasCard({
         campaign_name: action.campaña_existente_nombre ?? action.step_name ?? undefined,
         semana_label:  semanaLabel || undefined,
       })
-      localStorage.setItem(`kepler:sent:${sessionKey}:${nodo.id_nodo_cio}`, '1')
       setNodeUpdateStatus(prev => ({ ...prev, [orden]: 'success' }))
     } catch (err) {
       let msg = 'Error al actualizar en CIO — reintentá'
@@ -1285,7 +1265,6 @@ function StrategyCanvasCard({
         await new Promise(res => setTimeout(res, 150))
 
         if (r.sent) {
-          localStorage.setItem(`kepler:sent:${sessionKey}:${r.id_nodo_cio}`, '1')
           setNodeUpdateStatus(prev => ({ ...prev, [nodo.orden]: 'success' }))
         } else {
           setNodeUpdateStatus(prev => ({ ...prev, [nodo.orden]: 'error' }))
@@ -2168,8 +2147,6 @@ export default function EstrategiaPage() {
                         assignedTo={getCampaignOwner(action)}
                         userName={currentUser?.name ?? null}
                         semanaLabel={strategy.semana_label ?? ''}
-                        strategyId={strategy._id}
-                        strategyCreatedAt={strategy._created_at}
                         isPremium={true}
                       />
                     )
