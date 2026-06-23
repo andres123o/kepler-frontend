@@ -28,7 +28,7 @@ async function loadFunnelConfig(
     .eq('slug', funnelSlug)
     .single()
 
-  return (funnel?.config as FunnelConfig) ?? null
+  return (funnel?.config as unknown as FunnelConfig) ?? null
 }
 
 export default async function AppLayout({ children }: { children: ReactNode }) {

@@ -50,7 +50,7 @@ export async function login(
 
   if (!access) return { error: 'Sin acceso asignado. Contacta al administrador.' }
 
-  const org = access.organizations as { id: string; slug: string; name: string }
+  const org = access.organizations as unknown as { id: string; slug: string; name: string }
 
   const { data: funnels } = await supabase
     .from('funnels')
