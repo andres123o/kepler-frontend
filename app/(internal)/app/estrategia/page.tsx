@@ -1163,7 +1163,7 @@ function StrategyCanvasCard({
     if (!semanaLabel) return
     const nodos = action.nodos_completos ?? action.propuesta.nodos ?? []
 
-    // Solo Supabase — node_update_log persiste entre sesiones y dispositivos
+    // Estado global — si cualquier usuario envió el nodo, todos lo ven como "listo"
     api.getSentNodes(semanaLabel).then(({ sent }) => {
       const sentSet = new Set(sent)
       const fromServer: Record<number, NodeUpdateStatus> = {}
@@ -1768,6 +1768,55 @@ function SystemContextPanel({ ctx }: { ctx: SystemContext }) {
   )
 }
 
+// ─── Research Panel ───────────────────────────────────────────────────────────
+
+function ResearchPanel({
+  research,
+  edited,
+  onChangeEdited,
+  onRetry,
+}: {
+  research: { raw_text: string | null; citations: string[] }
+  edited: string
+  onChangeEdited: (v: string) => void
+  onRetry: () => void
+}) {
+  if (!research.raw_text) {
+    return (
+      <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-5">
+        <p className="text-amber-400 text-sm font-medium">Perplexity no devolvió datos esta vez.</p>
+        <p className="text-amber-400/60 text-xs mt-1">Puedes reintentar o continuar sin research — Claude usará solo señales SHAP.</p>
+        <button onClick={onRetry} className="mt-2 text-xs text-amber-400 underline">Reintentar</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+      <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-white font-semibold text-sm">Respuesta Perplexity — contexto de mercado</h3>
+          <p className="text-neutral-500 text-[11px] mt-0.5">Revisa y corrige si hace falta antes de enviarlo al agente</p>
+        </div>
+        <span className="text-[10px] text-neutral-600 bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700 shrink-0">sonar-pro</span>
+      </div>
+      <div className="mx-5 border-t border-neutral-800/60" />
+      <div className="px-5 py-4">
+        <textarea
+          value={edited}
+          onChange={e => onChangeEdited(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-3 py-2.5 text-xs text-neutral-300 font-mono resize-y focus:outline-none focus:border-amber-500/40"
+        />
+        {research.citations.length > 0 && (
+          <p className="text-neutral-700 text-[10px] mt-1.5">{research.citations.length} fuentes consultadas</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Canvas helpers ───────────────────────────────────────────────────────────
 
 function initEdits(s: StrategyResult): Record<number, ActionEdit> {
@@ -1806,6 +1855,11 @@ export default function EstrategiaPage() {
   const [structuralError, setStructuralError]         = useState<string | null>(null)
   const [structuralEdits, setStructuralEdits]         = useState<Record<number, ActionEdit>>({})
   const [latestPredLabel, setLatestPredLabel]         = useState<string | null>(null)
+  // ── Research Perplexity (paso 1 del flujo en 2 etapas) ──────────────────────
+  const [researchResult, setResearchResult]     = useState<{ raw_text: string | null; citations: string[] } | null>(null)
+  const [researchFetching, setResearchFetching] = useState(false)
+  const [researchError, setResearchError]       = useState<string | null>(null)
+  const [researchEdited, setResearchEdited]     = useState('')
 
   // ── Sesión y asignaciones ───────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState<{ name: string; role: 'admin' | 'agent'; campaign?: string } | null>(null)
@@ -1844,13 +1898,9 @@ export default function EstrategiaPage() {
       .catch(() => {})
   }, [currentUser])
 
-  const isAgent = currentUser?.role === 'agent'
-
-  // Filtra acciones: admin ve todo, agente solo su campaña
+  // Todos los usuarios de la misma org ven todo — la isolation cross-org la maneja el backend vía FunnelClient
   function filterAcciones(acciones: StrategyAction[]): StrategyAction[] {
-    if (!isAgent) return acciones
-    if (!userCampaign) return []
-    return acciones.filter(a => matchesCampaign(a, userCampaign))
+    return acciones
   }
 
   function matchesCampaign(action: StrategyAction, campaign: string): boolean {
@@ -1861,13 +1911,13 @@ export default function EstrategiaPage() {
     )
   }
 
-  // Badge: true si esta acción es la campaña propia del usuario
+  // Badge visual: "Tu campaña" si el usuario tiene asignación en esa campaña
   function isOwnCampaign(action: StrategyAction): boolean {
     if (!userCampaign) return false
     return matchesCampaign(action, userCampaign)
   }
 
-  // Badge: nombre del dueño de esta campaña (para admin)
+  // Badge visual: nombre del responsable de cada campaña
   function getCampaignOwner(action: StrategyAction): string | null {
     for (const [campName, ownerName] of Object.entries(campaignOwnerMap)) {
       if (matchesCampaign(action, campName)) return ownerName
@@ -1875,11 +1925,8 @@ export default function EstrategiaPage() {
     return null
   }
 
-  // Visibilidad de secciones para agentes
-  const agentHasMode1 = isAgent && !!strategy && filterAcciones(strategy.acciones).length > 0
-  const agentHasMode2 = isAgent && !!structuralResult && filterAcciones(structuralResult.acciones).length > 0
-  const showMode1Section = !isAgent || agentHasMode1
-  const showMode2Section = !isAgent || (agentHasMode2 && !agentHasMode1)
+  const showMode1Section = !!strategy
+  const showMode2Section = showMode1Section || !!structuralResult || structuralGenerating || !!structuralError
 
   useEffect(() => {
     // Signal 1: localStorage flag set explicitly by ingresar page after nueva proyección
@@ -1943,16 +1990,35 @@ export default function EstrategiaPage() {
     }
   }
 
-  async function handleStartAnalysis() {
+  async function handleFetchResearch() {
+    setResearchFetching(true)
+    setResearchError(null)
+    setResearchResult(null)
+    try {
+      const r = await api.fetchResearch()
+      setResearchResult(r)
+      setResearchEdited(r.raw_text ?? '')
+    } catch (e) {
+      setResearchError(e instanceof Error ? e.message : 'Error al buscar contexto de mercado')
+    } finally {
+      setResearchFetching(false)
+    }
+  }
+
+  async function handleGenerateWithResearch(mr: { raw_text: string | null; citations: string[] } | null = researchResult) {
+    const marketResearch = (researchResult && researchEdited !== '')
+      ? { raw_text: researchEdited, citations: researchResult.citations }
+      : mr
     setGenerating(true)
     setGenError(null)
     setStrategy(null)
+    setActionEdits({})
     setStructuralResult(null)
     setStructuralEdits({})
     setStructuralError(null)
     try {
       await api.syncCampaigns().catch(() => {})
-      const s = await api.generatePremium()
+      const s = await api.generatePremium(marketResearch)
       setStrategy(s)
       setActionEdits(initEdits(s))
       setResumenExpanded(false)
@@ -1961,6 +2027,16 @@ export default function EstrategiaPage() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  function handleResetAnalysis() {
+    setStrategy(null)
+    setActionEdits({})
+    setResearchResult(null)
+    setResearchEdited('')
+    setResearchError(null)
+    setGenError(null)
+    setResumenExpanded(false)
   }
 
   async function handleGenerateStructural() {
@@ -2023,50 +2099,109 @@ export default function EstrategiaPage() {
             <h2 className="text-white font-semibold text-lg">Estrategia semanal</h2>
           </div>
 
-          {/* ── Paso 1: formulario inicial ── */}
-          {!strategy && !generating && (
+          {/* ── Paso 1: buscar contexto de mercado ── */}
+          {!strategy && !generating && !researchResult && !researchFetching && (
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-5">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center shrink-0 mt-0.5 border border-neutral-700">
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-amber-400">
-                    <path d="M9 2C9 2 5 4 5 9C5 11.8 6.5 13.5 9 14C11.5 13.5 13 11.8 13 9C13 4 9 2 9 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-                    <path d="M6 9C6 9 7 10.5 9 11C11 10.5 12 9 12 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                    <path d="M9 14V16" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                    <path d="M7 16H11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    <circle cx="7.5" cy="7.5" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
+                    <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-white font-semibold mb-1">Genera la estrategia de esta semana</h3>
+                  <h3 className="text-white font-semibold mb-1">Paso 1 — Buscar contexto de mercado</h3>
                   <p className="text-neutral-500 text-sm leading-relaxed">
-                    Cruza la predicción del modelo con tus campañas, noticias de la semana e iniciativas de trii para decidir qué optimizar y cómo.
+                    Perplexity busca las noticias y variables macro de esta semana (COLCAP, TRM, noticias financieras).
+                    Revísalos y corrígelos si hace falta antes de que Claude los use para generar la estrategia.
                   </p>
                 </div>
               </div>
+              {researchError && (
+                <div className="bg-red-500/8 border border-red-500/20 rounded-lg px-4 py-3">
+                  <p className="text-red-400 text-xs font-medium">Error al buscar: {researchError}</p>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 text-xs text-neutral-600">
+                  <span>~15–20 seg</span><span>·</span><span>Perplexity sonar-pro</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {researchError && (
+                    <button
+                      onClick={() => handleGenerateWithResearch(null)}
+                      className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
+                    >
+                      Saltar y generar directo →
+                    </button>
+                  )}
+                  <button
+                    onClick={handleFetchResearch}
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-lg transition-colors"
+                  >
+                    Buscar contexto de mercado
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-              <div className="flex items-center justify-end gap-2">
+          {/* ── Cargando Perplexity ── */}
+          {researchFetching && !generating && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-6 py-5 flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="text-neutral-300 text-sm font-medium">Buscando contexto de mercado...</p>
+                <p className="text-neutral-600 text-xs mt-0.5">Perplexity sonar-pro consultando fuentes financieras colombianas</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Paso 2: research recibido — revisar y confirmar ── */}
+          {!strategy && !generating && researchResult && !researchFetching && (
+            <div className="space-y-3">
+              <ResearchPanel
+                research={researchResult}
+                edited={researchEdited}
+                onChangeEdited={setResearchEdited}
+                onRetry={handleFetchResearch}
+              />
+              {genError && (
+                <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-5 py-4">
+                  <p className="text-red-400 text-sm font-medium mb-0.5">Error al generar estrategia</p>
+                  <p className="text-red-400/70 text-xs">{genError}</p>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1">
                 <button
-                  onClick={handleStartAnalysis}
+                  onClick={handleResetAnalysis}
+                  className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+                >
+                  ← Buscar nuevo contexto
+                </button>
+                <button
+                  onClick={() => handleGenerateWithResearch()}
                   className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-sm rounded-lg transition-colors"
                 >
-                  Iniciar análisis
+                  Confirmar y generar estrategia →
                 </button>
               </div>
             </div>
           )}
 
-          {/* ── Loading ── */}
+          {/* ── Loading Claude ── */}
           {generating && <StrategyLoader awaitingMcp={false} />}
 
-          {/* ── Error ── */}
-          {genError && !generating && (
+          {/* ── Error Claude (sin research) ── */}
+          {genError && !generating && !researchResult && (
             <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-5 py-4">
               <p className="text-red-400 text-sm font-medium mb-1">Error al generar</p>
               <p className="text-red-400/70 text-xs">{genError}</p>
               <button
-                onClick={handleStartAnalysis}
+                onClick={handleFetchResearch}
                 className="mt-3 text-xs text-red-400 underline"
               >
-                Reintentar
+                Reintentar desde el principio
               </button>
             </div>
           )}
@@ -2080,6 +2215,12 @@ export default function EstrategiaPage() {
                 <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
                   <h3 className="text-white font-semibold">Qué está pasando esta semana</h3>
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={handleResetAnalysis}
+                      className="text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors border border-neutral-700 hover:border-neutral-600 px-2.5 py-1 rounded-lg"
+                    >
+                      Nuevo análisis
+                    </button>
                     {strategy.estado_funnel && (
                       <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${ESTADO_CFG[strategy.estado_funnel]?.cls}`}>
                         {ESTADO_CFG[strategy.estado_funnel]?.label}
@@ -2179,8 +2320,8 @@ export default function EstrategiaPage() {
                   <div>
                     <p className="text-white text-sm font-semibold mb-0.5">Actualizar copy de campañas de onboarding</p>
                     <p className="text-neutral-500 text-xs leading-relaxed">
-                      Consulta el calendario colombiano (festivos, quincena, prima, BanRep) y ajusta
-                      el copy transaccional de las campañas de registro según el contexto de la semana.
+                      Consulta el calendario de la semana (festivos, días de pago y señales laborales
+                      del país) y ajusta el copy de las campañas de onboarding según el contexto.
                     </p>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-function parseSession(value: string | undefined): { name: string; role: string } | null {
+function parseSession(value: string | undefined): { name: string; role: string; team_slug?: string } | null {
   if (!value) return null
   try {
     const parsed = JSON.parse(value)
@@ -18,8 +18,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Agentes no pueden acceder a ingresar datos
-  if (pathname.startsWith('/app/ingresar') && session?.role === 'agent') {
+  if (pathname.startsWith('/app/ingresar') && session?.role !== 'admin') {
     return NextResponse.redirect(new URL('/app/predecir', request.url))
   }
 

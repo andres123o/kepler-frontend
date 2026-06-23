@@ -1,11 +1,8 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import type { SessionUser } from '@/app/(internal)/login/actions'
 
-export interface SessionUser {
-  name: string
-  role: 'admin' | 'agent'
-  campaign?: string   // solo para admins con campaña asignada (ej: Juanita)
-}
+export type { SessionUser }
 
 export async function GET(): Promise<NextResponse<SessionUser | null>> {
   const store = await cookies()
@@ -15,7 +12,7 @@ export async function GET(): Promise<NextResponse<SessionUser | null>> {
 
   try {
     const parsed = JSON.parse(raw) as SessionUser
-    if (parsed?.name && parsed?.role) return NextResponse.json(parsed)
+    if (parsed?.name && parsed?.role && parsed?.org_slug) return NextResponse.json(parsed)
   } catch { /* ignora */ }
 
   return NextResponse.json(null)

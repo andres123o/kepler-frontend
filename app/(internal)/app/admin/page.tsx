@@ -12,6 +12,7 @@ interface AgentStatus {
   nodes_pending: number | null
   semana_label: string | null
   last_update: string | null
+  sent_by: string | null
   status: 'done' | 'partial' | 'pending'
 }
 
@@ -215,6 +216,9 @@ export default function AdminPage() {
                   {/* Última actividad */}
                   <td className="px-5 py-4">
                     <span className="text-neutral-500 text-xs">{timeAgo(agent.last_update)}</span>
+                    {agent.sent_by && agent.sent_by.toLowerCase() !== agent.user_name.toLowerCase() && (
+                      <span className="ml-1.5 text-[10px] text-amber-400/70">por {agent.sent_by}</span>
+                    )}
                   </td>
 
                   {/* Estado badge */}

@@ -2,87 +2,33 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
-
-// ─── Campos del modelo v2 ─────────────────────────────────────────────────────
-
-const AUTO_FIELDS = new Set([
-  'trm',
-  'sp500_cambio_semanal_pct',
-  'brent_cambio_semanal_pct',
-  'colcap_cambio_semanal_pct',
-  'spread_tes_banrep',
-  'trends_cdt',
-  'trends_acciones',
-  'pct_dias_quincena',
-])
-
-const GROUPS = [
-  {
-    id: 'funnel',
-    title: 'Funnel KYC',
-    description: 'Métricas de conversión internas de Trii',
-    fields: [
-      { key: 'step_09_full_account',   label: 'Full account (step 9)' },
-      { key: 'tasa_basic_a_risk',      label: 'Tasa basic → risk (%)' },
-      { key: 'tasa_risk_a_fulldata',   label: 'Tasa risk → full data (%)' },
-      { key: 'tasa_fulldata_a_video',  label: 'Tasa full data → video (%)' },
-      { key: 'tasa_video_a_review',    label: 'Tasa video → review (%)' },
-      { key: 'pct_perfil_conservador', label: '% perfil conservador' },
-      { key: 'pct_perfil_arriesgado',  label: '% perfil arriesgado' },
-      { key: 'full_users_aprobados',   label: 'Full users aprobados' },
-    ],
-  },
-  {
-    id: 'macro-auto',
-    title: 'Macro — automático',
-    description: 'Se obtienen automáticamente con el botón de abajo según la fecha de la semana',
-    autoFetch: true,
-    fields: [
-      { key: 'trm',                       label: 'TRM (COP/USD)' },
-      { key: 'colcap_cambio_semanal_pct', label: 'COLCAP variación semanal (%)' },
-      { key: 'sp500_cambio_semanal_pct',  label: 'S&P 500 variación semanal (%)' },
-      { key: 'brent_cambio_semanal_pct',  label: 'Brent variación semanal (%)' },
-      { key: 'spread_tes_banrep',         label: 'Spread TES 10Y − BanRep (%)' },
-      { key: 'trends_cdt',                label: 'Google Trends — CDT' },
-      { key: 'trends_acciones',           label: 'Google Trends — bolsa de valores' },
-      { key: 'pct_dias_quincena',         label: '% días quincena' },
-    ],
-  },
-  {
-    id: 'resultado',
-    title: 'Resultado real',
-    description: 'Completar cuando se conozca el valor real de esta semana',
-    fields: [
-      { key: 'usuarios_primer_cashin', label: 'Primer cash-in real' },
-    ],
-  },
-  {
-    id: 'metadata',
-    title: 'Metadata',
-    description: 'Para semanas atípicas o con intervención externa',
-    fields: [
-      { key: 'es_exogeno', label: 'Semana exógena (0 = normal · 1 = excluir del modelo)' },
-    ],
-  },
-]
+import { useFunnelConfigOptional } from '../FunnelConfigContext'
 
 type FormValues = Record<string, string>
 type AutoStatus = Record<string, 'ok' | 'error' | 'pending' | 'idle'>
 type PageState = 'loading' | 'has_data' | 'empty'
 
 export default function IngresarPage() {
+  const config = useFunnelConfigOptional()
   const router = useRouter()
-  const [pageState, setPageState]   = useState<PageState>('loading')
+
+  // Grupos y campos vienen del config del funnel activo
+  const groups = config?.ingestion_groups ?? []
+  const autoFields = new Set(
+    groups.filter(g => g.auto_fetch).flatMap(g => g.fields.map(f => f.key))
+  )
+
+  const [pageState, setPageState]       = useState<PageState>('loading')
   const [semanaActual, setSemanaActual] = useState('')
-  const [semana, setSemana]         = useState('')
-  const [form, setForm]             = useState<FormValues>({})
-  const [archiving, setArchiving]   = useState(false)
-  const [saving, setSaving]         = useState(false)
-  const [predicting, setPredicting] = useState(false)
+  const [semana, setSemana]             = useState('')
+  const [form, setForm]                 = useState<FormValues>({})
+  const [archiving, setArchiving]       = useState(false)
+  const [saving, setSaving]             = useState(false)
+  const [predicting, setPredicting]     = useState(false)
   const [autoFetching, setAutoFetching] = useState(false)
-  const [autoStatus, setAutoStatus] = useState<AutoStatus>({})
-  const [autoErrors, setAutoErrors] = useState<string[]>([])
-  const [banrepTasa, setBanrepTasa] = useState('')
+  const [autoStatus, setAutoStatus]     = useState<AutoStatus>({})
+  const [autoErrors, setAutoErrors]     = useState<string[]>([])
+  const [banrepTasa, setBanrepTasa]     = useState('')
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   useEffect(() => {
@@ -111,7 +57,7 @@ export default function IngresarPage() {
 
   async function handleNuevaProyeccion() {
     const ok = confirm(
-      `¿Archivar la semana ${semanaActual} en master_consolidado_final y abrir la semana nueva?`
+      `¿Archivar la semana ${semanaActual} e ingresar los datos de la semana nueva?`
     )
     if (!ok) return
     setArchiving(true)
@@ -146,13 +92,10 @@ export default function IngresarPage() {
       const banrep = banrepTasa.trim() ? parseFloat(banrepTasa.trim()) : null
       const result = await api.fetchAutoVariables(semana.trim(), banrep)
 
-      // Pre-llenar campos con valores obtenidos
       setForm(prev => {
         const next = { ...prev }
         for (const [field, value] of Object.entries(result.values)) {
-          if (value !== null && value !== undefined) {
-            next[field] = String(value)
-          }
+          if (value !== null && value !== undefined) next[field] = String(value)
         }
         return next
       })
@@ -282,31 +225,33 @@ export default function IngresarPage() {
         <p className="text-neutral-500 text-xs mt-2">Formato DD/MM/YYYY — fecha de inicio (lunes) de la semana</p>
       </div>
 
-      {/* Field groups */}
+      {/* Field groups — renderizados dinámicamente desde config */}
       <div className="space-y-5">
-        {GROUPS.map(group => (
+        {groups.map(group => (
           <section key={group.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
                 {group.title}
               </h2>
 
-              {/* Input BanRep + botón auto-fetch solo en el grupo macro-auto */}
-              {group.autoFetch && (
+              {/* Botón auto-fetch y tasa de referencia — solo en grupos con auto_fetch */}
+              {group.auto_fetch && (
                 <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[10px] text-neutral-500 leading-none">
-                      Tasa BanRep (%) <span className="text-amber-500/70">para spread</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="ej. 10.25"
-                      value={banrepTasa}
-                      onChange={e => setBanrepTasa(e.target.value)}
-                      className="w-24 bg-neutral-800 border border-neutral-700 rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    />
-                  </div>
+                  {config?.market?.rate_label && (
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[10px] text-neutral-500 leading-none">
+                        {config.market.rate_label} <span className="text-amber-500/70">para spread</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="ej. 10.25"
+                        value={banrepTasa}
+                        onChange={e => setBanrepTasa(e.target.value)}
+                        className="w-24 bg-neutral-800 border border-neutral-700 rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  )}
                   <button
                     onClick={handleAutoFetch}
                     disabled={autoFetching || !semana.trim()}
@@ -332,7 +277,7 @@ export default function IngresarPage() {
               <p className="text-neutral-500 text-xs mb-3">{group.description}</p>
             )}
 
-            {autoFetching && group.autoFetch && (
+            {autoFetching && group.auto_fetch && (
               <p className="text-amber-400/70 text-xs mb-3 animate-pulse">
                 Fetching yfinance + Google Trends... puede tardar hasta 60 s (pausa anti-rate-limit incluida)
               </p>
@@ -340,10 +285,10 @@ export default function IngresarPage() {
 
             <div className="grid grid-cols-2 gap-3 mt-3">
               {group.fields.map(f => {
-                const fieldStatus = autoStatus[f.key]
-                const isAuto = AUTO_FIELDS.has(f.key)
+                const fieldStatus  = autoStatus[f.key]
+                const isAuto       = autoFields.has(f.key)
                 const wasAutoFilled = isAuto && fieldStatus === 'ok'
-                const hadError = isAuto && fieldStatus === 'error'
+                const hadError      = isAuto && fieldStatus === 'error'
 
                 return (
                   <div key={f.key}>
@@ -358,7 +303,7 @@ export default function IngresarPage() {
                     </label>
                     <input
                       type="number"
-                      step="any"
+                      step={f.type === 'integer' ? '1' : 'any'}
                       value={form[f.key] ?? ''}
                       onChange={e => set(f.key, e.target.value)}
                       className={[
@@ -375,8 +320,8 @@ export default function IngresarPage() {
               })}
             </div>
 
-            {/* Errores de auto-fetch en el grupo macro-auto */}
-            {group.autoFetch && autoErrors.length > 0 && !autoFetching && (
+            {/* Errores de auto-fetch */}
+            {group.auto_fetch && autoErrors.length > 0 && !autoFetching && (
               <ul className="mt-3 space-y-1">
                 {autoErrors.map((e, i) => (
                   <li key={i} className="text-red-400/70 text-xs">

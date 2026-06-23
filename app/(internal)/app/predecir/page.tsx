@@ -1,52 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { api, PredictionResult, ContextoItem } from '@/lib/api'
-
-const FEATURE_LABELS: Record<string, string> = {
-  // Funnel
-  registros_semanal:                'Nuevos registros',
-  registros_semana:                 'Nuevos registros',
-  users_basic_data:                 'Usuarios en Basic Data',
-  users_risk_profile:               'Perfil de riesgo completado',
-  users_full_data:                  'Datos completos (Full Data)',
-  users_video_review:               'Revisión de video',
-  users_approved:                   'Usuarios aprobados',
-  users_cashin:                     'Primer depósito realizado',
-  // Macro
-  trm:                              'Tasa de cambio (TRM)',
-  TRM:                              'Tasa de cambio (TRM)',
-  tasa_intervencion_mensual:        'Tasa de intervención bancaria',
-  Tasa_Intervencion_Mensual:        'Tasa de intervención bancaria',
-  variacion_colcap:                 'Variación COLCAP',
-  Variacion_COLCAP:                 'Variación COLCAP',
-  // Calendario
-  es_festivo:                       'Semana con festivos',
-  es_primero_mes:                   'Inicio de mes',
-  es_final_mes:                     'Fin de mes',
-  semana_del_mes:                   'Semana del mes',
-  semana_del_mes_proyeccion:        'Semana del mes (próxima semana)',
-  dias_habiles_semana:              'Días hábiles esta semana',
-  dias_habiles_proyeccion:          'Días hábiles próxima semana',
-  mes_prima:                        'Mes del año',
-  mes:                              'Mes del año',
-  // Soporte
-  soporte_tickets:                  'Tickets de soporte',
-  soporte_tickets_semanal:          'Tickets de soporte',
-  // Features calculadas por el modelo
-  lag_1_target:                     'Activaciones la semana pasada',
-  registros_ponderados:             'Registros recientes ponderados por conversión',
-  aprobados_ponderados:             'Aprobaciones recientes ponderadas por conversión',
-  full_users_aprobados_lag1:        'Usuarios aprobados la semana anterior',
-  tendencia_registros_4w:           'Tendencia de registros (últimas 4 semanas)',
-  tendencia_aprobados_4w:           'Tendencia de aprobaciones (últimas 4 semanas)',
-  tendencia_depositos_4w:           'Tendencia de activaciones (últimas 4 semanas)',
-  tasa_registro_a_aprobado_ewma_4:  'Tendencia suavizada tasa registro → aprobado',
-  tasa_rechazo_implicita_kyc_ewma_4:'Tendencia suavizada de rechazo KYC',
-}
-
-function humanize(name: string): string {
-  return FEATURE_LABELS[name] ?? name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
+import { useFunnelConfigOptional } from '../FunnelConfigContext'
 
 const SEV: Record<string, { badge: string; border: string }> = {
   crítica:    { badge: 'text-red-400 bg-red-500/10 border border-red-500/20',       border: 'border-red-500/30' },
@@ -55,11 +10,12 @@ const SEV: Record<string, { badge: string; border: string }> = {
 }
 
 function HistorialSelector({
-  history, current, onSelect,
+  history, current, onSelect, locale,
 }: {
   history: PredictionResult[]
   current: PredictionResult
   onSelect: (r: PredictionResult) => void
+  locale:  string
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -107,7 +63,7 @@ function HistorialSelector({
                     </span>
                   )}
                   <span className="tabular-nums text-neutral-400">
-                    {item.prediccion_siguiente_semana.toLocaleString('es-CO')}
+                    {item.prediccion_siguiente_semana.toLocaleString(locale)}
                   </span>
                 </span>
               </button>
@@ -128,6 +84,24 @@ function describeCambio(ctx: ContextoItem) {
 }
 
 export default function PredecirPage() {
+  const config = useFunnelConfigOptional()
+
+  // Variables derivadas del config del funnel activo
+  const featureLabels = config?.feature_labels ?? {}
+  const locale        = config?.market.locale  ?? 'es-CO'
+  const targetLabel   = config?.ml.target_label ?? 'Usuarios Primer Depósito'
+
+  // Variables del grupo funnel → no accionables via campañas, se ocultan de "Factores clave"
+  const INTERNAL_VARS = new Set(
+    config?.ingestion_groups?.find(g => g.id === 'funnel')?.fields.map(f => f.key) ?? []
+  )
+  // Variables calculadas por el modelo (lags, tendencias, adstocks) — vienen del config del funnel
+  const DERIVED_VARS = new Set(config?.derived_vars ?? [])
+
+  function humanize(name: string): string {
+    return featureLabels[name] ?? name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  }
+
   const [loading, setLoading] = useState(true)
   const [history, setHistory] = useState<PredictionResult[]>([])
   const [result, setResult]   = useState<PredictionResult | null>(null)
@@ -167,23 +141,11 @@ export default function PredecirPage() {
 
   const r = result!
 
-  // Variables internas de funnel/KYC — solo se muestran en detalle técnico
-  const INTERNAL_VARS = new Set([
-    'step_09_full_account', 'tasa_basic_a_risk', 'tasa_risk_a_fulldata',
-    'tasa_fulldata_a_video', 'tasa_video_a_review',
-    'pct_perfil_conservador', 'pct_perfil_arriesgado', 'full_users_aprobados',
-  ])
-
-  // Variables derivadas del histórico — no accionables directamente, fuera de Factores clave
-  const DERIVED_VARS = new Set([
-    'lag_1_target', 'aprobados_ponderados', 'full_users_aprobados_lag1',
-  ])
-
   const ctxMap = Object.fromEntries(
     r.contexto_historico_top_features.map(c => [c.feature, c])
   )
 
-  // Vistas de marketing — sin variables internas de funnel
+  // Vista de marketing — sin variables internas de funnel ni derivadas
   const shapExt    = r.shap_top.filter(s => !INTERNAL_VARS.has(s.feature) && !DERIVED_VARS.has(s.feature))
   const shapPos    = shapExt.filter(s => s.contribution > 0).slice(0, 8)
   const shapNeg    = shapExt.filter(s => s.contribution < 0).slice(0, 8)
@@ -229,7 +191,7 @@ export default function PredecirPage() {
             </span>
           </p>
         </div>
-        <HistorialSelector history={history} current={r} onSelect={setResult} />
+        <HistorialSelector history={history} current={r} onSelect={setResult} locale={locale} />
       </div>
 
       <div className="space-y-6">
@@ -239,10 +201,10 @@ export default function PredecirPage() {
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl px-7 py-6 flex flex-col justify-between">
             <p className="text-neutral-400 text-xs uppercase tracking-widest mb-4">
-              Activaciones proyectadas
+              {targetLabel}
             </p>
             <p className="text-6xl font-bold text-white tabular-nums leading-none">
-              {r.prediccion_siguiente_semana.toLocaleString('es-CO')}
+              {r.prediccion_siguiente_semana.toLocaleString(locale)}
             </p>
           </div>
 
@@ -252,11 +214,11 @@ export default function PredecirPage() {
             </p>
             <div>
               <p className="text-4xl font-semibold text-neutral-200 tabular-nums leading-none">
-                {r.baseline_12w.toLocaleString('es-CO')}
+                {r.baseline_12w.toLocaleString(locale)}
               </p>
               <div className={`flex items-baseline gap-1.5 mt-3 ${r.brecha_vs_baseline >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 <span className="text-lg font-bold tabular-nums">
-                  {r.brecha_vs_baseline >= 0 ? '+' : ''}{r.brecha_vs_baseline.toLocaleString('es-CO')}
+                  {r.brecha_vs_baseline >= 0 ? '+' : ''}{r.brecha_vs_baseline.toLocaleString(locale)}
                 </span>
                 <span className="text-xs opacity-80">
                   {r.brecha_vs_baseline >= 0 ? 'sobre la línea base' : 'bajo la línea base'}
@@ -271,12 +233,12 @@ export default function PredecirPage() {
             </p>
             <div>
               <p className="text-4xl font-semibold text-neutral-200 tabular-nums leading-none">
-                {rangoMin.toLocaleString('es-CO')}
+                {rangoMin.toLocaleString(locale)}
                 <span className="text-neutral-600 font-light mx-2 text-3xl">a</span>
-                {rangoMax.toLocaleString('es-CO')}
+                {rangoMax.toLocaleString(locale)}
               </p>
               <p className="text-neutral-500 text-xs mt-3">
-                Margen de variación ±{r.mae_modelo?.toLocaleString('es-CO') ?? '—'}
+                Margen de variación ±{r.mae_modelo?.toLocaleString(locale) ?? '—'}
               </p>
             </div>
           </div>
@@ -289,11 +251,11 @@ export default function PredecirPage() {
             <p className="text-neutral-300 text-sm leading-relaxed">
               El equipo puede esperar{' '}
               <span className="text-white font-semibold">
-                {r.prediccion_siguiente_semana.toLocaleString('es-CO')} primeros depósitos
+                {r.prediccion_siguiente_semana.toLocaleString(locale)} {targetLabel.toLowerCase()}
               </span>{' '}
               esta semana,{' '}
               <span className={`font-semibold ${r.brecha_vs_baseline >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {Math.abs(r.brecha_vs_baseline).toLocaleString('es-CO')}{' '}
+                {Math.abs(r.brecha_vs_baseline).toLocaleString(locale)}{' '}
                 {r.brecha_vs_baseline >= 0 ? 'por encima' : 'por debajo'} de la línea base
               </span>
               {prescripcionExt.length > 0 && resumenSenales() && (
@@ -351,7 +313,7 @@ export default function PredecirPage() {
                           {' '}del promedio de las últimas 12 semanas
                           {ctx?.current_value != null && ctx?.trailing_12w_mean != null && (
                             <span className="text-neutral-600">
-                              {' '}(actual: {ctx.current_value.toLocaleString('es-CO', { maximumFractionDigits: 1 })} · promedio: {ctx.trailing_12w_mean.toLocaleString('es-CO', { maximumFractionDigits: 1 })})
+                              {' '}(actual: {ctx.current_value.toLocaleString(locale, { maximumFractionDigits: 1 })} · promedio: {ctx.trailing_12w_mean.toLocaleString(locale, { maximumFractionDigits: 1 })})
                             </span>
                           )}
                         </p>
@@ -372,7 +334,7 @@ export default function PredecirPage() {
             </div>
 
             <p className="text-neutral-600 text-xs mt-4 pl-1">
-              El número indica cuántos depósitos suma o resta esa variable a la proyección.
+              El número indica cuántos {targetLabel.toLowerCase()} suma o resta esa variable a la proyección.
             </p>
           </div>
         )}
@@ -382,7 +344,7 @@ export default function PredecirPage() {
           <div className="mb-5">
             <h2 className="text-white font-semibold text-sm">Factores clave esta semana</h2>
             <p className="text-neutral-500 text-xs mt-1">
-              Qué variables están impulsando o frenando la activación, y en qué magnitud
+              Qué variables están impulsando o frenando {targetLabel.toLowerCase()}, y en qué magnitud
             </p>
           </div>
 
@@ -484,11 +446,13 @@ export default function PredecirPage() {
                         </td>
                         <td className="py-2 pr-4 text-right text-neutral-300 text-xs tabular-nums">
                           {item.current_value != null
-                            ? item.current_value.toLocaleString('es-CO', { maximumFractionDigits: 2 })
+                            ? item.current_value.toLocaleString(locale, { maximumFractionDigits: 2 })
                             : '—'}
                         </td>
                         <td className="py-2 pr-4 text-right text-neutral-500 text-xs tabular-nums">
-                          {item.trailing_12w_mean.toLocaleString('es-CO', { maximumFractionDigits: 2 })}
+                          {item.trailing_12w_mean != null
+                            ? item.trailing_12w_mean.toLocaleString(locale, { maximumFractionDigits: 2 })
+                            : '—'}
                         </td>
                         <td className={`py-2 pr-4 text-right text-xs tabular-nums font-medium ${
                           item.z_score == null         ? 'text-neutral-600'

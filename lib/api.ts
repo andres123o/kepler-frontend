@@ -1,9 +1,34 @@
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
 
+// Cache en memoria — se resetea en cada navegación/recarga (comportamiento correcto).
+// La fuente de verdad es kepler-session (httpOnly), leída por /api/session/funnel server-side.
+let _headersCache: Record<string, string> | null = null
+
+async function getFunnelHeaders(): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return {}
+  if (_headersCache) return _headersCache
+  try {
+    const res = await fetch('/api/session/funnel')
+    if (!res.ok) return {}
+    const data = await res.json() as { org_slug: string; funnel_slug: string } | null
+    if (data?.org_slug && data?.funnel_slug) {
+      _headersCache = { 'X-Org-Slug': data.org_slug, 'X-Funnel-Slug': data.funnel_slug }
+      return _headersCache
+    }
+  } catch { /* ignora */ }
+  return {}
+}
+
+// Llamar tras switchFunnel() para que el siguiente request use el funnel nuevo.
+export function clearFunnelHeadersCache(): void {
+  _headersCache = null
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const funnelHeaders = await getFunnelHeaders()
   const res = await fetch(`${BACKEND}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...funnelHeaders, ...options?.headers },
   })
   if (!res.ok) {
     const text = await res.text()
@@ -45,8 +70,13 @@ export const api = {
   getStrategyHistory: () => apiFetch<StrategyResult[]>('/api/strategy/history'),
   getLatestStructural: () => apiFetch<StrategyResult>('/api/strategy/latest-structural'),
   getAssignments: () => apiFetch<{ user_name: string; campaign_name: string }[]>('/api/strategy/assignments'),
-  generatePremium: () =>
-    apiFetch<StrategyResult>('/api/strategy/generate-premium', { method: 'POST' }),
+  fetchResearch: () =>
+    apiFetch<{ raw_text: string | null; citations: string[] }>('/api/strategy/fetch-research', { method: 'POST' }),
+  generatePremium: (marketResearch?: { raw_text: string | null; citations: string[] } | null) =>
+    apiFetch<StrategyResult>('/api/strategy/generate-premium', {
+      method: 'POST',
+      body: JSON.stringify({ market_research: marketResearch ?? null }),
+    }),
   generateBasic: () =>
     apiFetch<StrategyResult>('/api/strategy/generate-basic', { method: 'POST' }),
   updateNode: (payload: { action_id: number; template_id: number; subject: string; cuerpo: string; preheader?: string; user_name?: string; campaign_name?: string; semana_label?: string }) =>
@@ -101,7 +131,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getAdminStatus: () =>
-    apiFetch<{ user_name: string; campaign_name: string; nodes_updated: number; nodes_total: number | null; nodes_pending: number | null; semana_label: string | null; last_update: string | null; status: 'done' | 'partial' | 'pending' }[]>('/api/strategy/admin-status'),
+    apiFetch<{ user_name: string; campaign_name: string; nodes_updated: number; nodes_total: number | null; nodes_pending: number | null; semana_label: string | null; last_update: string | null; sent_by: string | null; status: 'done' | 'partial' | 'pending' }[]>('/api/strategy/admin-status'),
 
   // ── Configuración ────────────────────────────────────────────────────────
   getTrackedCampaigns: () =>
