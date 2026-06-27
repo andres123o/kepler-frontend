@@ -1,0 +1,468 @@
+# Design System Inspired by Lulo Bank
+
+## 1. Visual Theme & Atmosphere
+
+Lulo Bank's design system embodies modern fintech accessibility with a bold, energetic personality. The interface balances professional financial credibility with youthful vibrancy through strategic use of electric lime accents against deep navy foundations. The design language is clean and spacious, prioritizing clarity and user confidence through generous whitespace, refined typography, and purposeful color contrast. Dark-mode dominance creates a premium, contemporary feel while the electric yellow accent (Lulo Green) serves as a high-energy call-to-action element that signals opportunity and financial growth. The overall aesthetic is minimalist yet approachable, designed to demystify banking and make financial services feel friendly and achievable.
+
+**Key Characteristics**
+- Deep navy and charcoal primary palette with high contrast against neutral backgrounds
+- Electric lime (`#E8FF00`) accent for primary CTAs and positive financial messaging
+- Generous spacing and breathing room throughout layouts
+- Bold, geometric typography using Gilroy font family
+- Soft, distant shadows creating subtle depth without visual clutter
+- Rounded interactive elements (buttons, cards) for approachability
+- Mobile-first responsive strategy with touch-friendly targets
+- Semantic color coding for financial states and user feedback
+
+## 2. Color Palette & Roles
+
+### Primary
+- **Deep Navy** (`#121622`): Primary surface color for headers, navigation, and high-contrast sections; used for text and background throughout the interface
+- **Navy Shade** (`#1B2132`): Secondary dark surface; used for elevated sections, cards, and container backgrounds to create subtle depth variation
+
+### Accent Colors
+- **Electric Lime** (`#E8FF00`): Primary accent and CTA button color; signals positive actions, financial gains, and interactive elements; used for floating action buttons and highlight states
+- **Sky Blue** (`#79CFFF`): Accent for secondary messaging; used sparingly for informational callouts and design highlights
+
+### Interactive
+- **Slate Blue** (`#2B3550`): Interactive component background; used for secondary buttons, form fields, and disabled states
+- **Slate Muted** (`#667A99`): Tertiary interactive element; used for inactive states and lower-priority actions
+- **Charcoal Link** (`#121722`): Link and navigation text; provides clickable element distinction
+
+### Neutral Scale
+- **Pure Black** (`#000000`): Primary text color for all body copy; ensures maximum readability and accessibility
+- **Pure White** (`#FFFFFF`): Inverse text on dark backgrounds; primary background for light mode sections and card surfaces
+- **Light Gray** (`#DFE2E7`): Tertiary text and subtle dividers; used for secondary information and border treatments
+- **Off White** (`#F4F4F4`): Subtle background fill; minimal contrast background for grouping related content
+
+### Surface & Borders
+- **Slate Border** (`#BDC9DB`): Border and divider color; provides subtle visual separation without distraction
+- **Navy Background** (`#1A2032`): Deep background surface variant; used as alternative primary background in dark-mode sections
+
+## 3. Typography Rules
+
+### Font Family
+- **Primary: Gilroy Bold** (`gilroy-bold`): Fallback stack `Gilroy, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+- **Secondary: Gilroy Regular** (`gilroy-regular`): Fallback stack `Gilroy, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+
+### Hierarchy
+
+| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
+|------|------|------|--------|-------------|----------------|-------|
+| Display XL | Gilroy Bold | 40px | 400 | 44px | 0 | Hero headlines; primary page titles |
+| Heading Large | Gilroy Regular | 38.4px | 400 | 42.24px | 0 | Section headers; major content divisions |
+| Heading Medium | Gilroy Bold | 19.2px | 400 | 19.2px | 0 | Subsection headers; card titles |
+| Body Primary | Gilroy Regular | 14px | 400 | 16.8px | 0 | Main content copy; standard paragraph text |
+| Body Secondary | Gilroy Regular | 16px | 400 | 16px | 0 | Supporting copy; feature descriptions |
+| Label / Button | Gilroy Bold | 16px | 400 | 16px | 0 | Button text; form labels; navigation items |
+| Caption | Gilroy Bold | 14.4px | 400 | 14.4px | 0 | Fine print; helper text; metadata |
+| Link | Gilroy Regular | 16px | 400 | 16px | 0 | Hyperlink text; navigation links |
+
+### Principles
+- Font weight is consistently `400` (regular) across all sizes; emphasis achieved through size and color contrast rather than weight variation
+- Line height set to 110–120% of font size for optimal readability and visual rhythm
+- Generous letter spacing not applied; relies on font geometry for clarity
+- Hierarchy established through size jumps and semantic color roles rather than excessive weight variation
+- All fonts default to screen-optimized rendering; use `-webkit-font-smoothing: antialiased` for crisp appearance
+- Maintain minimum 14px for body text to ensure accessibility on mobile devices
+
+## 4. Component Stylings
+
+### Buttons
+
+#### Primary Button
+- **Background**: `#2B3550` (Slate Blue)
+- **Text Color**: `#DFE2E7` (Light Gray)
+- **Font**: Gilroy Bold, `16px`, weight `400`, line-height `16px`
+- **Padding**: `14px 30px`
+- **Border Radius**: `60px`
+- **Height**: `44px`
+- **Border**: `0px` none
+- **Box Shadow**: `none`
+- **Hover State**: Background shifts to `#3A4563`, text remains `#DFE2E7`
+- **Active State**: Background `#1F2A3D`, text `#DFE2E7`
+- **Disabled State**: Background `#667A99`, text `#BDC9DB`, opacity `0.6`
+
+#### Secondary Button
+- **Background**: `transparent` (rgba(0, 0, 0, 0))
+- **Text Color**: `#121622` (Deep Navy)
+- **Font**: Gilroy Bold, `16px`, weight `400`, line-height `normal`
+- **Padding**: `14px 30px`
+- **Border Radius**: `60px`
+- **Height**: `49px`
+- **Border**: `2px solid #121622`
+- **Box Shadow**: `none`
+- **Hover State**: Background `#F4F4F4`, text `#121622`
+- **Active State**: Background `#DFE2E7`, text `#121622`
+
+#### Ghost Button (Small)
+- **Background**: `#2B3550` (Slate Blue)
+- **Text Color**: `#DFE2E7` (Light Gray)
+- **Font**: Gilroy Bold, `16px`, weight `400`, line-height `normal`
+- **Padding**: `10px 22px`
+- **Border Radius**: `60px`
+- **Height**: `41px`
+- **Border**: `0px` none
+- **Box Shadow**: `none`
+- **Hover State**: Background `#3A4563`
+
+#### CTA Button (Accent)
+- **Background**: `#E8FF00` (Electric Lime)
+- **Text Color**: `#000000` (Pure Black)
+- **Font**: Gilroy Bold, `16px`, weight `400`, line-height `16px`
+- **Padding**: `14px 30px`
+- **Border Radius**: `60px`
+- **Height**: `49px`
+- **Border**: `0px` none
+- **Box Shadow**: `0px 2px 8px rgba(232, 255, 0, 0.3)`
+- **Hover State**: Background `#D4E600`, text `#000000`, box-shadow `0px 4px 12px rgba(232, 255, 0, 0.4)`
+- **Active State**: Background `#B8CC00`, text `#000000`
+
+### Cards & Containers
+
+#### Hero Card (Full Width)
+- **Background**: `rgba(0, 0, 0, 0)` (transparent)
+- **Text Color**: `#000000`
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16px`
+- **Padding**: `0px`
+- **Border Radius**: `0px`
+- **Height**: `900px` (responsive)
+- **Width**: `100%` (responsive from `1440px`)
+- **Border**: `0px` none
+- **Box Shadow**: `none`
+
+#### Feature Card
+- **Background**: `rgba(0, 0, 0, 0)` or `#FFFFFF` variant
+- **Text Color**: `#000000`
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16px`
+- **Padding**: `0px`
+- **Border Radius**: `30px`
+- **Height**: `475px` (responsive)
+- **Width**: `750px` (50% responsive)
+- **Border**: `0px` none
+- **Box Shadow**: `rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.3) 0px 0px 60px -12px`
+
+#### Surface Card (Content Container)
+- **Background**: `#FFFFFF` or `#F4F4F4`
+- **Text Color**: `#000000`
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16.8px`
+- **Padding**: `40px` to `60px` (context-dependent)
+- **Border Radius**: `30px`
+- **Border**: `0px` none
+- **Box Shadow**: `rgba(0, 0, 0, 0.1) 0px 2px 8px`
+
+#### Dark Surface Card (Navy Background)
+- **Background**: `#1B2132` (Navy Shade)
+- **Text Color**: `#FFFFFF` or `#DFE2E7`
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16.8px`
+- **Padding**: `40px` to `60px`
+- **Border Radius**: `30px`
+- **Border**: `0px` none
+- **Box Shadow**: `rgba(0, 0, 0, 0.3) 0px 4px 12px`
+
+### Inputs & Forms
+
+#### Text Input (Default)
+- **Background**: `#FFFFFF`
+- **Text Color**: `#000000`
+- **Font**: Gilroy Regular, `14px`, weight `400`, line-height `16.8px`
+- **Padding**: `12px 16px`
+- **Border Radius**: `8px`
+- **Border**: `1px solid #DFE2E7`
+- **Box Shadow**: `none`
+- **Focus State**: Border `2px solid #121622`, box-shadow `0px 0px 0px 3px rgba(18, 22, 34, 0.1)`
+- **Error State**: Border `2px solid #FF4444`, text-color `#FF4444`
+
+#### Text Input (Dark Mode)
+- **Background**: `#2B3550` (Slate Blue)
+- **Text Color**: `#FFFFFF`
+- **Font**: Gilroy Regular, `14px`, weight `400`, line-height `16.8px`
+- **Padding**: `12px 16px`
+- **Border Radius**: `8px`
+- **Border**: `1px solid #667A99`
+- **Box Shadow**: `none`
+- **Placeholder Color**: `#BDC9DB`
+- **Focus State**: Border `2px solid #79CFFF`, box-shadow `0px 0px 0px 3px rgba(121, 207, 255, 0.15)`
+
+#### Form Label
+- **Font**: Gilroy Bold, `14.4px`, weight `400`, line-height `14.4px`
+- **Color**: `#000000` (light mode) or `#FFFFFF` (dark mode)
+- **Margin Bottom**: `8px`
+- **Letter Spacing**: `0.5px`
+
+#### Checkbox / Radio
+- **Size**: `20px × 20px`
+- **Border Radius**: `4px` (checkbox) or `50%` (radio)
+- **Background (Unchecked)**: `#FFFFFF`
+- **Border**: `2px solid #DFE2E7`
+- **Background (Checked)**: `#E8FF00`
+- **Border (Checked)**: `2px solid #E8FF00`
+- **Indicator Color**: `#000000`
+
+### Navigation
+
+#### Top Navigation Bar
+- **Background**: `#FFFFFF`
+- **Text Color**: `#121622` (Deep Navy)
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16px`
+- **Height**: `54px`
+- **Padding**: `0px 40px`
+- **Border**: `0px` none
+- **Box Shadow**: `none`
+- **Logo Font**: Gilroy Bold, responsive scaling
+- **Link Hover State**: Color `#2B3550`, underline `1px solid #2B3550`
+
+#### Mobile Navigation (Hamburger)
+- **Background**: `#1B2132` (Navy Shade)
+- **Text Color**: `#FFFFFF`
+- **Font**: Gilroy Regular, `16px`, weight `400`, line-height `16px`
+- **Padding**: `16px 20px`
+- **Menu Item Height**: `48px`
+- **Border**: `0px` none
+- **Active Item Background**: `#2B3550`
+- **Active Item Border Left**: `4px solid #E8FF00`
+
+#### Breadcrumb Navigation
+- **Font**: Gilroy Regular, `14px`, weight `400`, line-height `14px`
+- **Color**: `#667A99`
+- **Separator**: ` / ` or `>` in `#667A99`
+- **Active Item Color**: `#000000`
+
+### Badges & Status Indicators
+
+#### Badge (Positive)
+- **Background**: `#E8FF00` (Electric Lime)
+- **Text Color**: `#000000`
+- **Font**: Gilroy Bold, `12px`, weight `400`, line-height `12px`
+- **Padding**: `4px 12px`
+- **Border Radius**: `12px`
+
+#### Badge (Neutral)
+- **Background**: `#DFE2E7` (Light Gray)
+- **Text Color**: `#121622`
+- **Font**: Gilroy Bold, `12px`, weight `400`, line-height `12px`
+- **Padding**: `4px 12px`
+- **Border Radius**: `12px`
+
+#### Badge (Alert / Warning)
+- **Background**: `#FFE8E8`
+- **Text Color**: `#8B0000`
+- **Font**: Gilroy Bold, `12px`, weight `400`, line-height `12px`
+- **Padding**: `4px 12px`
+- **Border Radius**: `12px`
+
+### Notification / Alert Banner
+
+#### Info Alert (Coral)
+- **Background**: `#FFB3B3` (Coral; inferred from design context)
+- **Text Color**: `#121622`
+- **Icon Color**: `#121622`
+- **Font**: Gilroy Regular, `14px`, weight `400`, line-height `16.8px`
+- **Padding**: `16px 20px`
+- **Border Radius**: `8px`
+- **Border Left**: `4px solid #121622`
+
+## 5. Layout Principles
+
+### Spacing System
+
+**Base Unit**: `4px`
+
+**Spacing Scale & Usage**:
+- **4px** (`4px`): Micro-adjustments between inline elements
+- **8px** (`8px`): Gap between form elements, tight component spacing
+- **12px** (`12px`): Padding within small components, label-to-input spacing
+- **16px** (`16px`): Standard internal padding; gap between related sections
+- **20px** (`20px`): Component padding; spacing between cards in a row
+- **24px** (`24px`): Section margin; spacing between content blocks
+- **32px** (`32px`): Major section separation
+- **36px** (`36px`): Gap between full-width card rows
+- **40px** (`40px`): Standard container padding; hero section internal spacing
+- **52px** (`52px`): Large section padding
+- **60px** (`60px`): Extra-large section padding; hero internal spacing
+- **64px** (`64px`): Page-level section separation
+- **84px** (`84px`): Maximum page section spacing; hero-to-content separation
+
+**Contexts**:
+- Form fields: `16px` padding internally, `12px` gap between rows
+- Card stacks: `24px` to `36px` gap between cards
+- Hero sections: `60px` to `84px` internal padding
+- Navigation: `16px` to `20px` padding per item
+- Buttons: `14px` vertical, `30px` horizontal padding
+
+### Grid & Container
+
+**Max Width**: `1440px` (desktop full-width)
+
+**Column Strategy**:
+- Desktop: 12-column grid with `20px` gutter
+- Tablet: 8-column grid with `16px` gutter
+- Mobile: 4-column grid with `16px` gutter
+
+**Container Padding**:
+- Desktop: `40px` to `60px` horizontal
+- Tablet: `32px` horizontal
+- Mobile: `20px` horizontal
+
+**Section Patterns**:
+- Full-bleed hero: No horizontal padding; image extends edge-to-edge
+- Content section: Centered container within max-width with equal horizontal padding
+- Alternating layout: 50/50 split desktop, stacked mobile (feature + image pattern)
+- Card grid: Responsive from 1-column (mobile) → 2-column (tablet) → 3–4-column (desktop)
+
+### Whitespace Philosophy
+
+Lulo Bank employs generous, intentional whitespace to establish premium feel and reduce cognitive load. Breathing room between major sections (64px–84px vertical) creates hierarchy and focus. Card-based layouts with substantial padding (40px–60px) isolate content and encourage scanning. Hero sections use large negative space to draw attention to copy and CTA. Gaps between interactive elements (buttons, form fields) are deliberately wide to prevent accidental interaction. Whitespace increases in proportion to content importance—hero areas receive maximum breathing room, dense data tables receive tighter spacing.
+
+### Border Radius Scale
+
+- **0px** (`0px`): Full-bleed sections; hero backgrounds; top navigation bar
+- **4px** (`4px`): Form input fields; small UI components; data table cells
+- **5px** (`5px`): Modal window corners; overlay panels
+- **8px** (`8px`): Alert banners; small rounded components; micro-interactions
+- **12px** (`12px`): Badge elements; small badges and status indicators
+- **30px** (`30px`): Card containers; feature cards; panel overlays
+- **60px** (`60px`): Button elements; primary and secondary CTAs; highly rounded UI
+
+## 6. Depth & Elevation
+
+| Level | Treatment | Use |
+|-------|-----------|-----|
+| Flat (No Shadow) | `box-shadow: none` | Text, borders, flat graphics, primary navigation |
+| Level 1 (Subtle) | `0px 2px 8px rgba(0, 0, 0, 0.1)` | Light form inputs, secondary cards, hover states |
+| Level 2 (Soft) | `0px 4px 12px rgba(0, 0, 0, 0.15)` | Feature cards, elevated panels, interactive hover |
+| Level 3 (Medium) | `rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.3) 0px 0px 60px -12px` | Card containers, modals, prominent overlays |
+| Level 4 (Deep) | `0px 8px 24px rgba(0, 0, 0, 0.2)` | Dropdown menus, floating action buttons, modal dialogs |
+| Accent Glow | `0px 2px 8px rgba(232, 255, 0, 0.3)`, hover `0px 4px 12px rgba(232, 255, 0, 0.4)` | Electric Lime CTA buttons, highlight states, focus rings |
+| Dark Mode Shadow | `rgba(0, 0, 0, 0.3) 0px 4px 12px` | Elevated elements on dark backgrounds; cards on navy |
+
+**Shadow Philosophy**: Lulo Bank uses distant, soft shadows (blur-radius 12px–60px, negative y-offset) to create subtle elevation without harsh contrast. Shadows are applied sparingly to maintain the clean, minimal aesthetic. The primary shadow (`0px 0px 60px -12px` with 30% opacity black) creates a soft glow effect suggesting elevation. Accent glow applies only to Electric Lime CTAs to draw attention. Dark mode increases shadow opacity to 30% to maintain separation on navy backgrounds. Interactive hover states elevate through shadow increase rather than scale transforms.
+
+## 7. Do's and Don'ts
+
+### Do
+
+- **Use Electric Lime (`#E8FF00`) exclusively for primary CTAs** to ensure consistent, high-visibility call-to-action signaling
+- **Maintain 16px minimum line-height** for all body copy to ensure readability across devices
+- **Apply shadows with 12px+ blur radius** for soft, premium elevation effect
+- **Space major sections with 64px–84px vertical margin** to establish clear content hierarchy
+- **Use Gilroy Bold exclusively for headings, labels, and buttons** to maintain typographic consistency
+- **Keep button padding at 14px vertical × 30px horizontal** for touch-friendly interaction targets (minimum 44px height)
+- **Layer dark navy (`#1B2132`) over deep navy (`#121622`)** to create subtle depth variation in UI
+- **Apply 30px border-radius to card containers** consistently for cohesive card design language
+- **Use 60px border-radius for all button elements** to signal rounded, approachable interaction
+- **Implement 2px focus ring with Electric Lime on interactive elements** for keyboard navigation clarity
+- **Reserve Pure White (`#FFFFFF`) backgrounds for light-mode content sections** to maximize contrast with black text
+- **Scale typography proportionally on mobile**—decrease Display XL from 40px to 28px; Heading Large from 38.4px to 24px
+- **Stack 50/50 split layouts vertically on mobile** to prioritize readability
+- **Use Pure Black (`#000000`) for all body copy** without exception for accessibility
+
+### Don't
+
+- **Don't use Electric Lime for anything other than primary CTAs and success states**—reserve it for high-priority actions
+- **Don't apply multiple shadows to a single element**—maximum one elevation level per component
+- **Don't reduce button height below 44px** on touch interfaces; maintain minimum touch target size
+- **Don't apply font-weight other than 400** across the design system; emphasis through size and color only
+- **Don't use colors outside the defined palette**—all custom colors must be approved additions
+- **Don't reduce padding below 12px in form fields**; maintain comfortable touch targets
+- **Don't use rounded corners (border-radius) on full-bleed hero sections**—reserve for contained components
+- **Don't apply opacity to text below 80%**—maintain minimum contrast ratio of 4.5:1 for AA compliance
+- **Don't nest cards deeper than 2 levels** to avoid excessive shadow stacking and visual confusion
+- **Don't use navy backgrounds (`#1B2132`, `#121622`) on navy surfaces**—apply only over white/light backgrounds
+- **Don't mix Gilroy Bold and Gilroy Regular font weights in a single line**—select one or the other
+- **Don't reduce spacing below the base 4px unit**; avoid fractional spacing values
+- **Don't apply focus rings to elements without keyboard interaction support**
+- **Don't use Light Gray (`#DFE2E7`) for primary body text**—reserve for secondary information and disabled states
+- **Don't apply box-shadow animation on scroll**—use only on explicit user interaction (hover, focus, active)
+
+## 8. Responsive Behavior
+
+### Breakpoints
+
+| Breakpoint Name | Width | Key Changes |
+|-----------------|-------|-------------|
+| Mobile Small | 320px | 1-column layout, 16px horizontal padding, base typography sizes |
+| Mobile | 375px | 4-column grid, 20px horizontal padding, Display XL reduces to 28px |
+| Mobile Large | 480px | 4-column grid maintained, Heading Large reduces to 24px |
+| Tablet | 768px | 8-column grid, 32px horizontal padding, 2-column card layout, navigation collapses |
+| Desktop | 1024px | 12-column grid, 40px horizontal padding, 3-column card layout |
+| Desktop Large | 1440px | Full 1440px max-width container, 60px horizontal padding, 4-column card layout |
+
+### Touch Targets
+
+- **Minimum Size**: `44px × 44px` for all interactive elements (buttons, links, form inputs)
+- **Recommended Spacing**: `8px` minimum gap between adjacent touch targets
+- **Button Height**: Desktop `44px`–`49px`; Mobile maintains `44px` minimum
+- **Input Height**: `44px` on mobile, `40px` on desktop
+- **Link / Text Target**: Expand clickable area to `44px` height with pseudo-elements if native size is smaller
+- **Icon Button**: `40px × 40px` with centered `24px` icon
+
+### Collapsing Strategy
+
+**Navigation**: Top horizontal bar collapses to hamburger menu at `768px` breakpoint. Menu items stack vertically with `48px` height per item. Active state shown via `4px` left border in Electric Lime.
+
+**Hero Section**: Full-bleed image remains edge-to-edge. Headline reduces from `40px` → `28px`. Subheading reduces from `38.4px` → `24px`. Internal padding reduces from `84px` → `40px`.
+
+**50/50 Split Layout**: Remains side-by-side until `768px`, then stacks vertically with image below text. Padding adjusts from `60px` → `40px` on tablet, `20px` on mobile.
+
+**Card Grid**: 
+- Mobile: 1 column (full width minus padding)
+- Tablet: 2 columns with `16px` gap
+- Desktop: 3–4 columns with `20px` gap
+
+**Form Layouts**: Two-column form stacks to single column at `768px`. Label-input pairs shift from inline to stacked at `480px`.
+
+**Feature Cards**: Reduce from `750px` (50% width) on desktop to `100%` width on tablet and mobile; height scales proportionally.
+
+**Top Navigation Padding**: Desktop `40px` horizontal → Tablet `32px` → Mobile `16px`. Logo resizes from full width to icon-only at `480px`.
+
+**Button Sizing**: Desktop button `182px` width scales to fill or 100% width on mobile. Maintains `44px` height minimum.
+
+**Typography Scaling**:
+- Headings reduce by ~20% from desktop to mobile
+- Body text remains `14px` on all sizes for readability
+- Caption text maintains `12px`–`14.4px` across breakpoints
+
+## 9. Agent Prompt Guide
+
+### Quick Color Reference
+
+- **Primary CTA**: Electric Lime (`#E8FF00`) — Button backgrounds, primary actions, positive states
+- **Background (Light)**: Pure White (`#FFFFFF`) — Content containers, light-mode surfaces
+- **Background (Dark)**: Deep Navy (`#121622`) — Primary dark surfaces, headers, full-bleed sections
+- **Heading Text**: Pure Black (`#000000`) — All headline and heading copy
+- **Body Text**: Pure Black (`#000000`) — Primary paragraph and body copy
+- **Secondary Text**: Light Gray (`#DFE2E7`) — Disabled states, secondary labels, metadata
+- **Interactive (Primary Button)**: Slate Blue (`#2B3550`) — Primary button background
+- **Interactive (Secondary Button)**: Transparent with Deep Navy border (`#121622`) — Secondary button outline
+- **Links**: Deep Navy (`#121622`) — Hyperlink text, navigation items
+- **Dark Surfaces**: Navy Shade (`#1B2132`) — Elevated dark backgrounds, card overlays
+- **Borders**: Light Gray (`#DFE2E7`) — Form field borders, dividers, subtle separation
+- **Focus Ring**: Electric Lime (`#E8FF00`) → Keyboard focus state for accessibility
+- **Shadows**: Black @ 10%–30% opacity — Never pure black; always use transparent black with low opacity
+
+### Iteration Guide
+
+1. **Color Application**: Apply Electric Lime exclusively to primary CTAs and positive interactive states. Use Deep Navy and Navy Shade as foundational background colors. Pure Black for all text. Light Gray for secondary information and borders. No color should be applied outside the defined palette without prior approval.
+
+2. **Typography Foundation**: Use Gilroy Bold for all headings, labels, and buttons. Use Gilroy Regular for body copy, links, and supporting text. Font-weight is always `400`. Establish hierarchy through size variation alone, never through weight. Match exact sizes from Typography Hierarchy table.
+
+3. **Spacing Consistency**: Apply spacing from the defined scale (4px, 8px, 12px, 16px, 20px, 24px, 32px, 36px, 40px, 52px, 60px, 64px, 84px). No arbitrary spacing values. Hero sections receive 60px–84px padding. Standard content sections receive 40px padding. Form elements receive 16px padding with 12px gaps between rows.
+
+4. **Button Implementation**: All buttons use 60px border-radius. Primary buttons: Slate Blue background with Light Gray text. Secondary buttons: Transparent background with Deep Navy border. CTA buttons: Electric Lime background with Pure Black text. Minimum height 44px; padding 14px vertical × 30px horizontal. Hover state increases opacity or shifts shade; active state further decreases brightness.
+
+5. **Card & Container Structure**: Feature cards use 30px border-radius, soft shadow (`0px 0px 60px -12px rgba(0,0,0,0.3)`), and 40px–60px internal padding. Light cards on white backgrounds; dark cards on Navy Shade backgrounds. No card should exceed max-width 750px unless full-bleed. Hero cards remain full-bleed at 0px radius.
+
+6. **Form Field Design**: Text inputs 40px height, 12px padding, 4px border-radius, 1px Light Gray border. Dark mode variant: Slate Blue background, FFFFFF text, #BDC9DB placeholder. Focus state adds 3px Electric Lime border and subtle blue glow. Labels use Gilroy Bold 14.4px, margin-bottom 8px.
+
+7. **Navigation Structure**: Top bar 54px height, Pure White background, Deep Navy text, no shadow. Collapses to hamburger at 768px. Active navigation items show 4px left border in Electric Lime. Mobile menu: Navy Shade background, stacked items 48px height.
+
+8. **Responsive Implementation**: Use 6 breakpoints: 320px (mobile-small), 375px (mobile), 480px (mobile-large), 768px (tablet), 1024px (desktop), 1440px (desktop-large). Typography scales proportionally: Display XL (40px → 28px), Heading Large (38.4px → 24px), Body remains 14px. Layouts collapse from 4-column card grid → 2-column → 1-column. Padding reduces from 60px (desktop) → 40px (tablet) → 20px (mobile).
+
+9. **Elevation & Depth**: Apply shadows only to elevated components. Maximum 4 shadow levels. Primary card shadow: `0px 0px 60px -12px rgba(0,0,0,0.3)`. Hover shadow: `0px 4px 12px rgba(0,0,0,0.15)`. CTA button glow: `0px 2px 8px rgba(232,255,0,0.3)` → hover `0px 4px 12px rgba(232,255,0,0.4)`. No shadows on flat text or primary backgrounds.
+
+10. **Accessibility & Touch**: Maintain 44px minimum touch target height. Focus rings use 2px Electric Lime border. Link underlines visible on hover/focus. Ensure 4.5:1 contrast ratio between text and background. Never reduce text opacity below 80%. Use semantic HTML: buttons for actions, links for navigation. Test keyboard navigation on all interactive elements.
+
+11. **Dark Mode Strategy**: Apply Navy Shade (`#1B2132`) as primary dark background. Increase shadow opacity to 30%. Use FFFFFF or Light Gray for text on dark. Electric Lime maintains brightness in dark mode. Form inputs use Slate Blue with FFFFFF text. Navigation uses Deep Navy. Preserve contrast ratios across light and dark variants.
+
+12. **Consistency Enforcement**: Every button must be 44px minimum height with 60px radius. Every card must use 30px radius. Every heading must use Gilroy Bold. Every section must use spacing from defined scale. Every interactive element must support hover and focus states. Every color must be from the approved palette. No deviations without documented justification.
