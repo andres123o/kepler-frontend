@@ -134,7 +134,7 @@ export default function LuloBankPage() {
             maxWidth: '780px',
             margin: '0 auto 44px',
           }}>
-            La tasa al 13% terminó. Kepler activa los 594.000 restantes, analiza las tendencias, calibra el argumento y ejecuta en SendGrid.
+            La tasa al 13% terminó. Kepler activa los 594.000 usuarios restantes, analiza las tendencias, calibra el argumento y ejecuta en SendGrid.
           </p>
           <a href="#diagnostico" style={{
             display: 'inline-block',

@@ -27,7 +27,7 @@
 
   Muy concreto, sin jerga, 3 líneas:
   - Identifica qué usuarios de los 594K van a depositar esta semana (XGBoost + señales macro)
-  - Genera el copy calibrado al contexto exacto: tasa, quincena, BanRep
+  - Genera el copy calibrado al contexto exacto: tasa, quincena, BanRe
   - Lo ejecuta en Customer.io con grupo holdout para medir causalidad real
 
   3. La cifra — el resultado esperado
