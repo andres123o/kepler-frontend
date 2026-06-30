@@ -29,6 +29,10 @@ export default function LuloBankPage() {
         @media (max-width: 768px) {
           .kepler-mobile-block { display: flex !important; }
           .kepler-main-content { display: none !important; }
+          .kepler-cta-dark button {
+            background: #1b2132 !important;
+            color: #f4f4f4 !important;
+          }
         }
       `}</style>
 
@@ -38,43 +42,109 @@ export default function LuloBankPage() {
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        background: '#1b2132',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 32px',
-        textAlign: 'center',
+        overflow: 'hidden',
       }}>
-        <img
-          src="https://res.cloudinary.com/dmyq0gr14/image/upload/v1765342242/unnamed-removebg-preview_xa4cji.png"
-          alt="Kepler"
-          width={56}
-          height={56}
-          style={{ objectFit: 'contain', marginBottom: '32px' }}
-        />
-        <p style={{
-          color: '#ffffff',
-          fontSize: '22px',
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.3,
-          marginBottom: '16px',
+
+        {/* ── HEADER: dos columnas ── */}
+        <div style={{ display: 'flex', flexShrink: 0, height: '20vh' }}>
+
+          {/* Col izquierda — claro: Kepler */}
+          <div style={{
+            flex: 1,
+            background: '#f4f4f4',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '2px',
+          }}>
+            <img
+              src="https://res.cloudinary.com/dmyq0gr14/image/upload/v1765342242/unnamed-removebg-preview_xa4cji.png"
+              alt="Kepler"
+              style={{ width: '40px', height: '40px', objectFit: 'contain', display: 'block' }}
+            />
+            <span style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '-0.02em', color: '#1b2132', fontFamily: '"Georgia", serif' }}>
+              Kepler
+            </span>
+          </div>
+
+          {/* Col derecha — oscuro: Lulo */}
+          <div style={{
+            flex: 1,
+            background: '#1b2132',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <img
+              src="https://www.lulobank.com/images/logo-footer.svg"
+              alt="Lulo Bank"
+              style={{ height: '40px', width: 'auto', maxWidth: '120px', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
+            />
+          </div>
+
+        </div>
+
+        {/* ── HERO: amarillo — texto ── */}
+        <div style={{
+          background: '#e8ff00',
+          flex: '0 0 36vh',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          padding: '28px 28px',
         }}>
-          Esta experiencia fue diseñada para pantalla completa.
-        </p>
-        <p style={{
-          color: 'rgba(255,255,255,0.5)',
-          fontSize: '16px',
-          lineHeight: 1.75,
-          marginBottom: '40px',
-          maxWidth: '320px',
+          <h1 style={{
+            fontFamily: gilroy.style.fontFamily,
+            color: '#1b2132',
+            fontSize: 'clamp(36px, 10vw, 48px)',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.08,
+            margin: '0 0 14px',
+          }}>
+            Esta experiencia fue diseñada para pantalla completa.
+          </h1>
+          <p style={{
+            fontFamily: gilroy.style.fontFamily,
+            color: '#1b2132',
+            fontSize: '16px',
+            fontWeight: 400,
+            lineHeight: 1.6,
+            margin: 0,
+            opacity: 0.65,
+          }}>
+            Ábrela en tu computador para ver el diagnóstico completo.
+          </p>
+        </div>
+
+        {/* ── CTA: claro — botón oscuro ── */}
+        <div style={{
+          background: '#f4f4f4',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          justifyContent: 'flex-start',
+          padding: '52px 28px 28px',
+          gap: '18px',
         }}>
-          Ábrela en tu computador para ver el diagnóstico completo.
-        </p>
-        <MobileShareButton />
-        <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '11px', marginTop: '48px', letterSpacing: '0.04em' }}>
-          Kepler · Confidencial para Lulo
-        </p>
+          <div className="kepler-cta-dark" style={{ width: '100%' }}>
+            <MobileShareButton />
+          </div>
+          <p style={{
+            color: 'rgba(27,33,50,0.52)',
+            fontSize: '13px',
+            letterSpacing: '0em',
+            margin: '8px 0 0',
+            textAlign: 'left',
+            lineHeight: 1.5,
+          }}>
+            Diagnóstico de activación · Kepler para Lulo Bank
+          </p>
+        </div>
+
       </div>
 
       {/* ── CONTENIDO PRINCIPAL (oculto en mobile) ── */}
