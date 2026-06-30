@@ -431,7 +431,7 @@ function Panel2({ sp }: { sp: MotionValue<number> }) {
           Hiper-Personalización Automatizada
         </h2>
         <p style={{ fontSize: '17px', lineHeight: 1.85, color: 'rgba(255,255,255,0.6)', margin: 0 }}>
-          Convertimos todo ese contexto (mercado + datos + usuario) en un motor de crecimiento que opera en piloto automático. El sistema decide dinámicamente qué gatillo psicológico usar para cada segmento: a un cliente de alto valor le inyecta urgencia ("asegura esta tasa fija antes de que el mercado baje"), mientras que a un usuario nuevo lo educa ("vence la inflación con tu primer CDT"). Todo esto se orquesta y ejecuta a escala, garantizando el mensaje correcto, al usuario correcto, en el canal exacto.
+          Convertimos todo ese contexto (mercado + datos + usuario) en un motor de crecimiento que opera en piloto automático. El sistema decide dinámicamente qué gatillo psicológico usar para cada segmento: a un cliente de alto valor le inyecta urgencia ("asegura esta tasa fija antes de que el mercado baje"), mientras que a un usuario nuevo lo educa ("vence la inflación con tu primer CDT"). Todo esto se orquesta y ejecuta a escala, y lo mejor: sin implementaciones nuevas ni migración, todo desde su stack actual, garantizando el mensaje correcto, al usuario correcto, en el canal exacto.
         </p>
       </div>
 
