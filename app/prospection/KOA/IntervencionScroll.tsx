@@ -7,31 +7,31 @@ const GRADIENT = `linear-gradient(135deg, #4A0072 0%, #C2185B 50%, #FF8C00 100%)
 const PANELS = [
   {
     tag: '',
-    desc: 'mParticle les da contexto interno del usuario en app. Eventos, cohortes, segmentos de comportamiento.',
+    desc: 'Zoho CRM gestiona la comunicación con reglas condicionales básicas: si el campo X cambia, envía el mensaje Y. No fue pensado para optimizar comunicaciones.',
     label: 'No hace esto',
     items: [
-      'No proyecta activación ni qué mueve la tendencia en la semana',
-      'No identifica el momento mental del usuario',
-      'No tiene señales de mercado: tasa BanRep, quincena, spread CDT, etc.',
+      'No analiza señales de los usuarios',
+      'No decide qué comunicación tiene más probabilidad de generar depósitos esta semana',
+      'No tiene señales de mercado: tasa BanRep, quincena, spread CDT vs. inflación',
     ],
   },
   {
     tag: '',
-    desc: 'SendGrid les da ejecución de email y comunicaciones a escala. Entrega, templates, segmentación básica.',
+    desc: 'ZeptoMail les da entrega de email a escala, el relay que ejecuta lo que Zoho decide.',
     label: 'No hace esto',
     items: [
-      'No tiene inteligencia propia sobre el momento del usuario',
-      'No conecta señales macro con el segmento que va a convertir',
-      'Ejecuta instrucciones. No decide qué decirle a quién ni cuándo',
+      'No tiene inteligencia propia sobre el momento mental del usuario',
+      'No conecta el contexto macro con el segmento que va a convertir',
+      'Ejecuta reglas estáticas. No decide qué decirle a quién ni cuándo',
     ],
   },
   {
     tag: '',
-    desc: 'Sin Kepler, la tasa de activación semanal no supera el 8% en fintechs de inversión en Colombia. Se mantiene. No crece.',
+    desc: 'Sin una capa de inteligencia, la conversión cross-sell de libranza a CDT se mantiene en 7,7%. No crece.',
     label: 'Ejemplo',
     items: [
-      'Semana de quincena con spread CDT +5pp sobre inflación. La ventana de conversión existe pero no hay nadie que la detecte y la ejecute automáticamente.',
-      'Sin intervención calibrada al contexto, esa liquidez se dispersa en gastos antes del siguiente ciclo.',
+      'Empleados públicos estrato 3-4 cobran quincena los días 15 y 30. La liquidez existe, pero nadie la detecta ni la activa automáticamente.',
+      'Sin comunicación calibrada al momento de mercado y al momento mental del usuario, esa plata se dispersa en gastos antes del siguiente ciclo.',
     ],
   },
 ]
@@ -83,7 +83,7 @@ export default function IntervencionScroll() {
             lineHeight: 1.3,
             margin: '0 0 20px',
           }}>
-            Sus herramientas no conectan el contexto de mercado con el momento del usuario
+            Tienen el CRM y el canal. Les falta la capa de inteligencia.
           </p>
         </div>
 

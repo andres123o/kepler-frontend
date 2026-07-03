@@ -4,20 +4,20 @@ import { motion, useScroll, useTransform, MotionValue } from 'framer-motion'
 
 const PANELS = [
   {
-    titulo: 'Fricción pre-lanzamiento',
-    texto: 'Ingeniería anticipó la fricción con "CDT a un toque" (v.2.78.0). Este patrón sistémico acaparó el 67% de los releases (4 de 6 en 90 días) para reparar el funnel. Esta inestabilidad previa ya había exigido dos parches críticos semanales (v2.74.0 y .1) en onboarding y publicar 5 causas de fallos PSE para frenar el insostenible volumen de tickets.',
+    titulo: 'La automatización no es orquestación',
+    texto: 'Zoho CRM automatiza cuándo enviar, pero envía lo mismo a todos: sin contexto de mercado, sin personalización por cliente, sin leer su momento mental. No decide qué comunicación genera más depósitos, ni ejecuta nada sin que alguien configure la regla a mano. Kepler sí lo decide, lo personaliza y lo ejecuta directo en el mismo CRM, sin configuración manual.',
     titleColor: '#171717',
     textColor: 'rgba(23,23,23,0.6)',
   },
   {
-    titulo: 'Fricción post-registro confirmada por usuarios',
-    texto: 'Un análisis NLP (tiendas de apps) muestra que el 33% de usuarios reporta fricción en depósitos/PSE, costando -1.30 estrellas (regresión OLS). Un rating idéntico (4.6) en iOS/Android descarta fallos de plataforma y confirma un gap de activación. Este bloqueo del funnel explica las 0 reviews del CDT en dos semanas: la base no logra descubrirlo ni activarlo.',
+    titulo: 'El 92,3% de la base histórica nunca abrió un CDT',
+    texto: 'KOA tiene 117.000 clientes de libranza: ya vinculados, ya bancarizados, ya conocen la marca. Solo 9.000 (7,7%) han abierto un CDT. Los 108.000 restantes no son un problema de adquisición, es una base dormida esperando el momento correcto para convertir.',
     titleColor: '#FFFFFF',
     textColor: 'rgba(255,255,255,0.55)',
   },
   {
-    titulo: 'Potenciando la capacidad operativa para escalar el CDT',
-    texto: 'El CDT es clave para el break-even. Para cumplir la visión del CEO de "profundizar relaciones con clientes actuales", Kepler maximiza la activación personalizada y otorga musculatura operativa al equipo de Growth (en actual expansión). Así, el éxito inicial (6.4x la meta, impulsado por tasas del 13% y prensa) dejará de ser temporal para convertirse en un motor de conversión sostenible.',
+    titulo: 'Contratan para operar, no para crecer',
+    texto: 'Las vacantes activas de KOA lo confirman: operaciones, contabilidad, crédito, diseño gráfico. Ninguna es growth, data o CRM strategy. Están contratando para operar y cumplir regulación, no para escalar la inteligencia de captación que exige la meta. Y esa función no se resuelve contratando: se resuelve con una capa de inteligencia autónoma y eficiente sobre lo que ya tienen.',
     titleColor: '#FFFFFF',
     textColor: 'rgba(255,255,255,0.55)',
   },
@@ -80,6 +80,10 @@ export default function DiagnosticoScroll() {
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress: sp } = useScroll({ target: ref, offset: ['start start', 'end end'] })
 
+  /* claro (crema Kepler) → oscuro (negro Kepler) → cierre en el morado
+     de la primera propuesta (#2A1040) — un poco más claro que el intento
+     más oscuro (#170822), mismo matiz que el punto del chrome en
+     ContextoScroll. */
   const bgColor = useTransform(
     sp,
     [0, 0.29, 0.32, 0.63, 0.66, 1],

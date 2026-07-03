@@ -1,4 +1,4 @@
-// Lulo Bank — Estimación de Gap de Activación
+// KOA — Estimación de Gap de Activación
 import ContextoScroll from './ContextoScroll'
 import DiagnosticoScroll from './DiagnosticoScroll'
 import MobileShareButton from './MobileShareButton'
@@ -24,9 +24,9 @@ const GRADIENT = `linear-gradient(115deg, ${C.purple} 0%, ${C.magenta} 50%, ${C.
 
 const f = `var(--font-inter), "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif`
 
-const LULO_LOGO = 'https://www.lulobank.com/images/logo-footer.svg'
+const KOA_LOGO = 'https://koa.co/wp-content/uploads/2026/01/group-koa.png'
 
-export default function LuloBankPage() {
+export default function KOAPage() {
   return (
     <div style={{ fontFamily: f, lineHeight: '1.6' }}>
       <style>{`
@@ -74,7 +74,7 @@ export default function LuloBankPage() {
             </span>
           </div>
 
-          {/* Col derecha — Lulo Bank */}
+          {/* Col derecha — KOA */}
           <div style={{
             flex: 1,
             background: '#F5F5F4',
@@ -84,9 +84,9 @@ export default function LuloBankPage() {
             padding: '0 20px',
           }}>
             <img
-              src={LULO_LOGO}
-              alt="Lulo Bank"
-              style={{ height: '34px', width: 'auto', maxWidth: '140px', objectFit: 'contain', display: 'block', filter: 'brightness(0)' }}
+              src={KOA_LOGO}
+              alt="KOA"
+              style={{ height: '34px', width: 'auto', maxWidth: '140px', objectFit: 'contain', display: 'block' }}
             />
           </div>
 
@@ -146,7 +146,7 @@ export default function LuloBankPage() {
             textAlign: 'left',
             lineHeight: 1.5,
           }}>
-            Diagnóstico de activación · Kepler para Lulo Bank
+            Diagnóstico de activación · Kepler para KOA
           </p>
         </div>
 
@@ -181,7 +181,7 @@ export default function LuloBankPage() {
           }}>Kepler</span>
         </div>
         <span style={{ backgroundImage: GRADIENT, color: '#ffffff', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.01em', padding: '0 44px', display: 'flex', alignItems: 'center', borderRadius: 0 }}>
-          Lulo Bank
+          KOA
         </span>
       </header>
 
@@ -213,7 +213,8 @@ export default function LuloBankPage() {
             lineHeight: '1.08',
             marginBottom: '20px',
           }}>
-            Sus CDTs tienen alcance.<br />La activación, todavía no.
+            Van a cerrar el año con 17.925 CDTs.
+            <br />La meta pública son 30.000.
           </h1>
           <p style={{
             fontFamily: f,
@@ -224,7 +225,7 @@ export default function LuloBankPage() {
             maxWidth: '780px',
             margin: '0 auto 44px',
           }}>
-            La tasa al 13% terminó. Kepler activa los 594.000 usuarios restantes, analiza las tendencias, calibra el argumento y ejecuta en SendGrid.
+            Con el mismo ritmo y el mismo stack, KOA no llega. Kepler activa los 108.000 clientes de libranza que nunca abrieron un CDT, optimiza comunicaciones, personaliza y ejecuta en Zoho CRM.
           </p>
           <a href="#diagnostico" style={{
             display: 'inline-block',
@@ -251,17 +252,17 @@ export default function LuloBankPage() {
       {/* ══ S_INT — INTERVENCIÓN ══ sticky scroll 2 columnas */}
       <IntervencionScroll />
 
-      {/* ══ S2 — PARA LULO ESTA SEMANA ══ scrollytelling */}
+      {/* ══ S2 — PARA KOA ESTA SEMANA ══ scrollytelling */}
       <S2Scroll />
 
       {/* ══ S6 — EL CIERRE ══ crema Kepler */}
       <section style={{ background: C.cream, padding: '100px 60px 104px', textAlign: 'center' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
           <p style={{ fontSize: 'clamp(26px, 3vw, 42px)', fontWeight: 700, letterSpacing: '-0.02em', color: C.ink, lineHeight: 1.3, marginBottom: '24px' }}>
-            Esto tiene sentido para nosotros y para Lulo.
+            Esto tiene sentido para nosotros y para KOA.
           </p>
           <p style={{ color: C.muted, fontSize: '18px', lineHeight: 1.85, marginBottom: '48px' }}>
-            Todo desde fuentes abiertas, sin acceder a un solo dato interno de Lulo. Con sus datos, pasamos de diagnóstico a ejecución y activamos los 594.000 restantes.
+            Con sus datos, pasamos de diagnóstico a ejecución y activamos los 108.000 clientes de libranza que nunca abrieron un CDT.
           </p>
           <a
             href="https://wa.me/573015081517"

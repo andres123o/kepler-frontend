@@ -10,7 +10,7 @@ export default function MobileShareButton() {
   const handleShare = async () => {
     const url = window.location.href
     if (navigator.share) {
-      try { await navigator.share({ title: 'Kepler para Lulo Bank', url }) } catch {}
+      try { await navigator.share({ title: 'Kepler para KOA', url }) } catch {}
     } else {
       await navigator.clipboard.writeText(url)
       setCopied(true)
