@@ -1,9 +1,9 @@
 // Lulo Bank — Estimación de Gap de Activación
 import ContextoScroll from './ContextoScroll'
 import DiagnosticoScroll from './DiagnosticoScroll'
-import MobileShareButton from './MobileShareButton'
 import IntervencionScroll from './IntervencionScroll'
 import S2Scroll from './S2Scroll'
+import MobileExperience from './MobileExperience'
 
 // Paleta real de Kepler (extraída de app/(marketing)/ — Hero.tsx, HowItWorks.tsx, Benefits.tsx)
 const C = {
@@ -41,115 +41,12 @@ export default function LuloBankPage() {
         }
       `}</style>
 
-      {/* ── MOBILE BLOCK ── */}
+      {/* ── MOBILE BLOCK — experiencia completa mobile (columna única, mismas animaciones) ── */}
       <div className="kepler-mobile-block" style={{
         display: 'none',
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
         flexDirection: 'column',
-        overflow: 'hidden',
       }}>
-
-        {/* ── HEADER: dos columnas ── */}
-        <div style={{ display: 'flex', flexShrink: 0, height: '20vh' }}>
-
-          {/* Col izquierda — Kepler */}
-          <div style={{
-            flex: 1,
-            background: C.cream,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '2px',
-          }}>
-            <img
-              src="https://res.cloudinary.com/dmyq0gr14/image/upload/v1765342242/unnamed-removebg-preview_xa4cji.png"
-              alt="Kepler"
-              style={{ width: '40px', height: '40px', objectFit: 'contain', display: 'block' }}
-            />
-            <span style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '-0.02em', color: C.ink, fontFamily: f }}>
-              Kepler
-            </span>
-          </div>
-
-          {/* Col derecha — Lulo Bank */}
-          <div style={{
-            flex: 1,
-            background: '#F5F5F4',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 20px',
-          }}>
-            <img
-              src={LULO_LOGO}
-              alt="Lulo Bank"
-              style={{ height: '34px', width: 'auto', maxWidth: '140px', objectFit: 'contain', display: 'block', filter: 'brightness(0)' }}
-            />
-          </div>
-
-        </div>
-
-        {/* ── HERO: negro Kepler — texto ── */}
-        <div style={{
-          background: C.black,
-          flex: '0 0 36vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          padding: '28px 28px',
-        }}>
-          <h1 style={{
-            fontFamily: f,
-            color: C.white,
-            fontSize: 'clamp(36px, 10vw, 48px)',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.08,
-            margin: '0 0 14px',
-          }}>
-            Esta experiencia fue diseñada para pantalla completa.
-          </h1>
-          <p style={{
-            fontFamily: f,
-            color: 'rgba(255,255,255,0.62)',
-            fontSize: '16px',
-            fontWeight: 400,
-            lineHeight: 1.6,
-            margin: 0,
-          }}>
-            Ábrela en tu computador para ver el diagnóstico completo.
-          </p>
-        </div>
-
-        {/* ── CTA: claro — botón oscuro ── */}
-        <div style={{
-          background: C.cream,
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          justifyContent: 'flex-start',
-          padding: '52px 28px 28px',
-          gap: '18px',
-        }}>
-          <div className="kepler-cta-dark" style={{ width: '100%' }}>
-            <MobileShareButton />
-          </div>
-          <p style={{
-            color: 'rgba(23,23,23,0.52)',
-            fontSize: '13px',
-            letterSpacing: '0em',
-            margin: '8px 0 0',
-            textAlign: 'left',
-            lineHeight: 1.5,
-          }}>
-            Diagnóstico de activación · Kepler para Lulo Bank
-          </p>
-        </div>
-
+        <MobileExperience />
       </div>
 
       {/* ── CONTENIDO PRINCIPAL (oculto en mobile) ── */}
