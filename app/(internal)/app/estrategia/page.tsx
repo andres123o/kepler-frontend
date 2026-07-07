@@ -1768,6 +1768,42 @@ function SystemContextPanel({ ctx }: { ctx: SystemContext }) {
   )
 }
 
+// ─── Fuentes consultadas — desplegable, separado del texto de análisis ────────
+
+function FuentesConsultadas({ citations }: { citations: string[] }) {
+  const [open, setOpen] = useState(false)
+  if (!citations || citations.length === 0) return null
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors"
+      >
+        {open
+          ? 'Ocultar fuentes ↑'
+          : `Ver ${citations.length} fuente${citations.length !== 1 ? 's' : ''} consultada${citations.length !== 1 ? 's' : ''} ↓`}
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1 pl-0.5">
+          {citations.map((url, i) => (
+            <li key={i} className="text-[11px] text-neutral-500 truncate">
+              <span className="text-neutral-700">[{i + 1}]</span>{' '}
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-amber-400 underline decoration-neutral-700"
+              >
+                {url}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // ─── Research Panel ───────────────────────────────────────────────────────────
 
 function ResearchPanel({
@@ -1809,9 +1845,7 @@ function ResearchPanel({
           spellCheck={false}
           className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-3 py-2.5 text-xs text-neutral-300 font-mono resize-y focus:outline-none focus:border-amber-500/40"
         />
-        {research.citations.length > 0 && (
-          <p className="text-neutral-700 text-[10px] mt-1.5">{research.citations.length} fuentes consultadas</p>
-        )}
+        <FuentesConsultadas citations={research.citations} />
       </div>
     </div>
   )
@@ -2263,6 +2297,7 @@ export default function EstrategiaPage() {
                   >
                     {resumenExpanded ? 'Ver menos ↑' : 'Ver análisis completo ↓'}
                   </button>
+                  <FuentesConsultadas citations={strategy.research_citations ?? []} />
                 </div>
 
               </div>
@@ -2408,6 +2443,7 @@ export default function EstrategiaPage() {
                     >
                       {structuralResumenExpanded ? 'Ver menos ↑' : 'Ver análisis completo ↓'}
                     </button>
+                    <FuentesConsultadas citations={structuralResult.research_citations ?? []} />
                   </div>
 
                 </div>

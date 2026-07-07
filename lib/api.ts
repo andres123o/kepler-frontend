@@ -161,6 +161,13 @@ export const api = {
     apiFetch<{ ok: boolean; deleted: string }>(`/api/config/knowledge-base/${id}`, {
       method: 'DELETE',
     }),
+  getPromptComposite: (agentType: string) =>
+    apiFetch<PromptComposite>(`/api/config/prompts/composite/${agentType}`),
+  updatePromptComposite: (agentType: string, content: string) =>
+    apiFetch<PromptCompositeSaveResult>(`/api/config/prompts/composite/${agentType}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
 
   // ── Auto-fetch variables macro ──────────────────────────────────────────
   fetchAutoVariables: (semana: string, banrepTasa?: number | null) => {
@@ -380,6 +387,7 @@ export interface StrategyResult {
   estado_funnel: 'estable' | 'anomalia_leve' | 'anomalia_critica'
   semana_label?: string
   acciones: StrategyAction[]
+  research_citations?: string[]
   _id?: string
   _created_at?: string
 }
@@ -460,6 +468,16 @@ export interface KnowledgeBaseEntry {
   titulo: string
   contenido: string
   activo: boolean
+}
+
+export interface PromptComposite {
+  agent_type: string
+  composite: string
+  updated_at: string | null
+}
+
+export interface PromptCompositeSaveResult extends PromptComposite {
+  updated: string[]
 }
 
 export interface SystemContext {

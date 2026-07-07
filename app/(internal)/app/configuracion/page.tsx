@@ -643,6 +643,271 @@ function KnowledgeBaseSection() {
   )
 }
 
+// ─── System Prompts (compuesto por agente, secciones desplegables) ────────────
+
+const AGENT_LABELS: Record<string, string> = {
+  premium: 'Premium',
+  basic: 'Básico',
+}
+
+const PROMPT_TYPE_LABELS: Record<string, string> = {
+  system: 'Instrucciones generales',
+  kb_preamble: 'Cómo usar la Knowledge Base',
+  user_template: 'Template de datos semanales',
+  perplexity_system: 'Instrucciones de búsqueda de mercado',
+  perplexity_query: 'Qué le preguntamos al buscador',
+}
+
+interface PromptSection {
+  type: string
+  title: string
+  body: string
+}
+
+// Separa el composite (marcadores <!--@prompt:tipo-->) en secciones — espejo
+// exacto de _parse_prompt_composite en supabase_client.py (backend es la fuente
+// de verdad al guardar; esto es solo para mostrar/editar por sección en la UI).
+function parseComposite(composite: string): PromptSection[] {
+  const markerRe = /<!--@prompt:(\w+)-->[ \t]*\n/g
+  const matches: { type: string; start: number; end: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = markerRe.exec(composite))) {
+    matches.push({ type: m[1], start: m.index, end: markerRe.lastIndex })
+  }
+  return matches.map((match, i) => {
+    const bodyEnd = i + 1 < matches.length ? matches[i + 1].start : composite.length
+    let body = composite.slice(match.end, bodyEnd)
+    const titleMatch = body.match(/^###[^\n]*\n/)
+    const title = titleMatch
+      ? titleMatch[0].replace(/^###\s*/, '').trim()
+      : PROMPT_TYPE_LABELS[match.type] ?? match.type
+    if (titleMatch) body = body.slice(titleMatch[0].length)
+    return { type: match.type, title, body: body.trim() }
+  })
+}
+
+function rebuildComposite(sections: PromptSection[]): string {
+  return sections
+    .map(s => `<!--@prompt:${s.type}-->\n### ${s.title}\n${s.body}`.replace(/\s+$/, ''))
+    .join('\n\n\n') + '\n'
+}
+
+function PromptSectionRow({
+  section,
+  originalBody,
+  expanded,
+  editing,
+  onToggleExpand,
+  onToggleEdit,
+  onChangeBody,
+}: {
+  section: PromptSection
+  originalBody: string
+  expanded: boolean
+  editing: boolean
+  onToggleExpand: () => void
+  onToggleEdit: () => void
+  onChangeBody: (body: string) => void
+}) {
+  const dirty = section.body !== originalBody
+
+  return (
+    <div className="border border-neutral-800 rounded-lg overflow-hidden bg-neutral-950/40">
+      <button
+        onClick={onToggleExpand}
+        className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-neutral-800/30 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-xs text-neutral-300 font-medium">
+          <span className={`text-neutral-600 transition-transform inline-block ${expanded ? 'rotate-90' : ''}`}>▸</span>
+          {PROMPT_TYPE_LABELS[section.type] ?? section.title}
+          {dirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Cambios sin guardar" />}
+        </span>
+        <span className="text-[10px] text-neutral-600 shrink-0">{section.body.length.toLocaleString('es-CO')} caracteres</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-neutral-800/60 px-3 py-3">
+          <div className="flex items-center justify-end mb-2">
+            <button
+              onClick={onToggleEdit}
+              className="text-[11px] text-neutral-600 hover:text-amber-400 transition-colors"
+            >
+              {editing ? 'Ver solo lectura' : 'Editar esta sección'}
+            </button>
+          </div>
+          {editing ? (
+            <textarea
+              value={section.body}
+              onChange={e => onChangeBody(e.target.value)}
+              rows={16}
+              spellCheck={false}
+              className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-3 py-2.5 text-xs text-neutral-300 font-mono resize-y focus:outline-none focus:border-amber-500/40 leading-relaxed"
+            />
+          ) : (
+            <pre className="whitespace-pre-wrap text-xs text-neutral-400 font-mono leading-relaxed max-h-96 overflow-y-auto">
+              {section.body}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AgentPromptCard({ agentType }: { agentType: 'premium' | 'basic' }) {
+  const [composite, setComposite] = useState<string | null>(null)
+  const [original, setOriginal] = useState('')
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [editingTypes, setEditingTypes] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    api.getPromptComposite(agentType)
+      .then(r => {
+        setComposite(r.composite)
+        setOriginal(r.composite)
+        setUpdatedAt(r.updated_at)
+      })
+      .catch(e => setError(e instanceof Error ? e.message : 'Error al cargar el prompt'))
+      .finally(() => setLoading(false))
+  }, [agentType])
+
+  const sections = composite !== null ? parseComposite(composite) : []
+  const originalByType = new Map(parseComposite(original).map(s => [s.type, s.body]))
+
+  function toggleExpand(type: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }
+
+  function toggleEdit(type: string) {
+    setEditingTypes(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+    setExpanded(prev => new Set(prev).add(type))
+  }
+
+  function handleChangeBody(type: string, newBody: string) {
+    const updated = sections.map(s => (s.type === type ? { ...s, body: newBody } : s))
+    setComposite(rebuildComposite(updated))
+  }
+
+  function handleCancelAll() {
+    setComposite(original)
+    setEditingTypes(new Set())
+    setError(null)
+  }
+
+  async function handleSave() {
+    if (composite === null) return
+    setSaving(true)
+    setError(null)
+    try {
+      const r = await api.updatePromptComposite(agentType, composite)
+      setComposite(r.composite)
+      setOriginal(r.composite)
+      setUpdatedAt(r.updated_at)
+      setEditingTypes(new Set())
+      setSuccess(
+        r.updated.length > 0
+          ? `Se actualizó: ${r.updated.map(pt => PROMPT_TYPE_LABELS[pt] ?? pt).join(', ')}.`
+          : 'No hubo cambios que guardar.'
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al guardar el prompt')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const dirty = composite !== null && composite !== original
+  const updatedLabel = updatedAt
+    ? new Date(updatedAt).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : null
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+      <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-white font-semibold text-sm">Agente {AGENT_LABELS[agentType]}</h3>
+          <p className="text-neutral-500 text-[11px] mt-0.5">
+            {loading ? 'Cargando…' : `${(composite ?? '').length.toLocaleString('es-CO')} caracteres totales`}
+            {updatedLabel ? ` · última edición ${updatedLabel}` : ''}
+          </p>
+        </div>
+        {dirty && (
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-amber-400/70">Cambios sin guardar</span>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-semibold text-xs rounded-lg transition-colors disabled:opacity-40"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button
+              onClick={handleCancelAll}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && <div className="px-5 pb-3"><ErrorBanner msg={error} onDismiss={() => setError(null)} /></div>}
+      {success && <div className="px-5 pb-3"><SuccessBanner msg={success} onDismiss={() => setSuccess(null)} /></div>}
+
+      {!loading && (
+        <>
+          <div className="mx-5 border-t border-neutral-800/60" />
+          <div className="px-5 py-4 space-y-2">
+            {sections.map(section => (
+              <PromptSectionRow
+                key={section.type}
+                section={section}
+                originalBody={originalByType.get(section.type) ?? ''}
+                expanded={expanded.has(section.type)}
+                editing={editingTypes.has(section.type)}
+                onToggleExpand={() => toggleExpand(section.type)}
+                onToggleEdit={() => toggleEdit(section.type)}
+                onChangeBody={body => handleChangeBody(section.type, body)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function PromptsSection() {
+  return (
+    <section>
+      <SectionHeader
+        title="System Prompts"
+        description="Las instrucciones completas de cada agente, como un solo bloque. Al guardar, el sistema identifica solo qué parte cambió."
+      />
+      <div className="space-y-4">
+        <AgentPromptCard agentType="premium" />
+        <AgentPromptCard agentType="basic" />
+      </div>
+    </section>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ConfiguracionPage() {
@@ -652,6 +917,7 @@ export default function ConfiguracionPage() {
 
         <CampaignsSection />
         <KnowledgeBaseSection />
+        <PromptsSection />
 
       </div>
     </div>
