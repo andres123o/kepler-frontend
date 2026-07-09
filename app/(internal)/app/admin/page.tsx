@@ -53,6 +53,8 @@ export default function AdminPage() {
   const [data, setData]         = useState<AgentStatus[]>([])
   const [isAdmin, setIsAdmin]   = useState<boolean | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [orgLabel, setOrgLabel] = useState<string | null>(null)
+  const [funnelLabel, setFunnelLabel] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -62,6 +64,8 @@ export default function AdminPage() {
           router.replace('/app/estrategia')
           return
         }
+        setOrgLabel(u.org_name ?? u.org_slug ?? null)
+        setFunnelLabel(u.funnel_name ?? u.funnel_slug ?? null)
         setIsAdmin(true)
       })
       .catch(() => router.replace('/app/estrategia'))
@@ -99,7 +103,14 @@ export default function AdminPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">Panel de Equipo</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-white text-2xl font-bold">Panel de Equipo</h1>
+            {funnelLabel && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                Viendo: {orgLabel ? `${orgLabel} — ` : ''}{funnelLabel}
+              </span>
+            )}
+          </div>
           <p className="text-neutral-500 text-sm mt-1">
             {semana ? `Semana ${semana}` : 'Estado de actualizaciones por agente — semana actual'}
           </p>
