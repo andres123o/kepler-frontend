@@ -1925,8 +1925,8 @@ export default function EstrategiaPage() {
       return
     }
 
-    // Agente: obtener su campaña asignada desde el backend
-    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/strategy/assignment?user_name=${currentUser.name}`)
+    // Agente: obtener su campaña asignada desde el backend (vía proxy interno)
+    fetch(`/api/proxy/api/strategy/assignment?user_name=${encodeURIComponent(currentUser.name)}`)
       .then(r => r.json())
       .then(d => setUserCampaign(d.campaign ?? null))
       .catch(() => {})

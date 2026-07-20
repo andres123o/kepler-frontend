@@ -1,34 +1,17 @@
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
+// Todo pasa por el proxy interno (app/api/proxy) — nunca directo al backend.
+// El proxy corre server-side, adjunta el secreto compartido y los headers de
+// organización/funnel desde la sesión httpOnly (no desde lo que mande el cliente).
+const BACKEND = '/api/proxy'
 
-// Cache en memoria — se resetea en cada navegación/recarga (comportamiento correcto).
-// La fuente de verdad es kepler-session (httpOnly), leída por /api/session/funnel server-side.
-let _headersCache: Record<string, string> | null = null
-
-async function getFunnelHeaders(): Promise<Record<string, string>> {
-  if (typeof window === 'undefined') return {}
-  if (_headersCache) return _headersCache
-  try {
-    const res = await fetch('/api/session/funnel')
-    if (!res.ok) return {}
-    const data = await res.json() as { org_slug: string; funnel_slug: string } | null
-    if (data?.org_slug && data?.funnel_slug) {
-      _headersCache = { 'X-Org-Slug': data.org_slug, 'X-Funnel-Slug': data.funnel_slug }
-      return _headersCache
-    }
-  } catch { /* ignora */ }
-  return {}
-}
-
-// Llamar tras switchFunnel() para que el siguiente request use el funnel nuevo.
-export function clearFunnelHeadersCache(): void {
-  _headersCache = null
-}
+// Ya no hace falta cachear headers de funnel en el cliente: el proxy los deriva
+// de la cookie de sesión en cada request. Se deja como no-op para no romper a
+// quienes la llaman tras switchFunnel().
+export function clearFunnelHeadersCache(): void {}
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const funnelHeaders = await getFunnelHeaders()
   const res = await fetch(`${BACKEND}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...funnelHeaders, ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   })
   if (!res.ok) {
     const text = await res.text()
